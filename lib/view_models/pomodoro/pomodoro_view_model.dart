@@ -1,0 +1,195 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import '../../core/constants/app_constants.dart';
+
+/// 番茄钟模式
+enum PomodoroMode {
+  work, // 工作模式
+  shortBreak, // 短休息
+  longBreak, // 长休息
+}
+
+/// 番茄钟状态
+enum PomodoroState {
+  idle, // 空闲（未开始）
+  running, // 运行中
+  paused, // 暂停
+  completed, // 完成
+}
+
+/// 番茄钟ViewModel
+class PomodoroViewModel extends ChangeNotifier {
+  Timer? _timer;
+  Duration _remainingTime = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+  PomodoroMode _mode = PomodoroMode.work;
+  PomodoroState _state = PomodoroState.idle;
+  bool _isLocked = false; // 是否锁定（倒计时期间）
+  int _completedPomodoros = 0; // 完成的番茄钟数量
+
+  // Getters
+  Duration get remainingTime => _remainingTime;
+  Duration get totalDuration => _totalDuration;
+  PomodoroMode get mode => _mode;
+  PomodoroState get state => _state;
+  bool get isLocked => _isLocked;
+  int get completedPomodoros => _completedPomodoros;
+
+  /// 格式化时间显示（MM:SS）
+  String get formattedTime {
+    final minutes = _remainingTime.inMinutes;
+    final seconds = _remainingTime.inSeconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  /// 获取模式显示文本
+  String get modeText {
+    switch (_mode) {
+      case PomodoroMode.work:
+        return '工作模式';
+      case PomodoroMode.shortBreak:
+        return '短休息';
+      case PomodoroMode.longBreak:
+        return '长休息';
+    }
+  }
+
+  /// 获取模式颜色
+  int get modeColor {
+    switch (_mode) {
+      case PomodoroMode.work:
+        return 0xFFF44336; // 红色
+      case PomodoroMode.shortBreak:
+        return 0xFF4CAF50; // 绿色
+      case PomodoroMode.longBreak:
+        return 0xFF2196F3; // 蓝色
+    }
+  }
+
+  /// 开始倒计时（自定义时长）
+  void startCountdown(Duration duration) {
+    if (_state == PomodoroState.running) return;
+
+    debugPrint('PomodoroViewModel.startCountdown: duration=$duration');
+    
+    // 限制最大时间为120分钟（2小时）
+    final maxDuration = const Duration(minutes: 120);
+    _totalDuration = duration > maxDuration ? maxDuration : duration;
+    _remainingTime = _totalDuration;
+    _state = PomodoroState.running;
+    _isLocked = true; // 锁定界面
+    _mode = PomodoroMode.work; // 默认工作模式
+
+    debugPrint('PomodoroViewModel.startCountdown: state=$_state, remainingTime=$_remainingTime, totalTime=$_totalDuration');
+    
+    _startTimer();
+    notifyListeners();
+    
+    debugPrint('PomodoroViewModel.startCountdown: notifyListeners called');
+  }
+
+  /// 开始标准番茄钟
+  void startStandardPomodoro() {
+    final duration = Duration(minutes: AppConstants.pomodoroWorkDuration);
+    startCountdown(duration);
+  }
+
+  /// 暂停/继续
+  void togglePause() {
+    if (_state == PomodoroState.running) {
+      _pause();
+    } else if (_state == PomodoroState.paused) {
+      _resume();
+    }
+  }
+
+  /// 暂停
+  void _pause() {
+    _timer?.cancel();
+    _state = PomodoroState.paused;
+    notifyListeners();
+  }
+
+  /// 继续
+  void _resume() {
+    if (_remainingTime.inSeconds > 0) {
+      _state = PomodoroState.running;
+      _startTimer();
+      notifyListeners();
+    }
+  }
+
+  /// 取消倒计时
+  void cancel() {
+    _timer?.cancel();
+    _timer = null;
+    _remainingTime = Duration.zero;
+    _totalDuration = Duration.zero;
+    _state = PomodoroState.idle;
+    _isLocked = false; // 解锁界面
+    notifyListeners();
+  }
+
+  /// 跳过当前倒计时
+  void skip() {
+    _timer?.cancel();
+    _remainingTime = Duration.zero;
+    _onCompleted();
+  }
+
+  /// 重置倒计时
+  void reset() {
+    _timer?.cancel();
+    _remainingTime = _totalDuration;
+    _state = PomodoroState.running;
+    _startTimer();
+    notifyListeners();
+  }
+
+  /// 启动定时器
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_remainingTime.inSeconds > 0) {
+        _remainingTime = Duration(seconds: _remainingTime.inSeconds - 1);
+        notifyListeners();
+      } else {
+        _onCompleted();
+      }
+    });
+  }
+
+  /// 倒计时完成
+  void _onCompleted() {
+    _timer?.cancel();
+    _state = PomodoroState.completed;
+
+    if (_mode == PomodoroMode.work) {
+      _completedPomodoros++;
+      // 每4个工作后进入长休息
+      if (_completedPomodoros % AppConstants.pomodorosUntilLongBreak == 0) {
+        _mode = PomodoroMode.longBreak;
+        _remainingTime = Duration(minutes: AppConstants.pomodoroLongBreakDuration);
+      } else {
+        _mode = PomodoroMode.shortBreak;
+        _remainingTime = Duration(minutes: AppConstants.pomodoroShortBreakDuration);
+      }
+      // 自动开始休息倒计时
+      _state = PomodoroState.running;
+      _startTimer();
+    } else {
+      // 休息结束，回到工作模式
+      _mode = PomodoroMode.work;
+      _isLocked = false; // 解锁界面
+    }
+
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+}
+

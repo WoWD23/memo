@@ -1,0 +1,257 @@
+# Memo 项目开发规范
+
+## 代码风格规范
+
+### 格式化
+- 使用 dart format 自动格式化
+- 每行代码长度不超过 100 字符
+- 使用 2 个空格缩进
+- 文件末尾保留一个空行
+
+### 引号
+- 优先使用单引号
+- 双引号仅在字符串内包含单引号时使用
+
+### 导入顺序
+1. dart 库
+2. Flutter 库
+3. 第三方库
+4. 项目内部库
+- 每个导入组之间用空行分隔
+- 使用 show 或 hide 限制导入内容
+
+## 架构规范
+
+### 架构模式
+MVVM (Model-View-ViewModel)
+
+### 目录结构
+lib/
+├── core/           # 核心功能（常量、工具类、主题、路由等）
+├── models/         # 数据模型
+├── services/       # 业务逻辑服务
+├── repositories/   # 数据仓库
+├── view_models/    # ViewModel（状态管理）
+├── views/          # 页面视图
+├── widgets/        # 可复用组件
+├── utils/          # 工具函数
+└── main.dart       # 入口文件
+
+## 命名规范
+
+### 文件命名
+- 使用 snake_case: user_profile.dart, check_in_service.dart
+- 测试文件: user_profile_test.dart
+- 页面文件: check_in_view.dart
+
+### 类命名
+- 使用 PascalCase: UserProfile, CheckInService, PomodoroTimer
+- Widget 类名: CheckInView, PomodoroWidget
+- ViewModel 类名: CheckInViewModel, PomodoroViewModel
+
+### 变量和函数命名
+- 使用 camelCase: userName, checkInTime, startTimer()
+- 私有成员: 以下划线开头 _privateVariable, _privateMethod()
+- 常量: 使用 lowerCamelCase: maxRetryCount
+
+### 布尔值命名
+- 使用 is, has, should 前缀: isChecked, hasPermission, shouldNotify
+
+## 状态管理规范
+
+### 状态管理方案
+Provider + ChangeNotifier
+
+### 状态管理规则
+- 全局状态放在顶层 Provider
+- 页面级状态使用 ViewModel (ChangeNotifier)
+- 避免过度使用全局状态
+- ViewModel 放在 view_models/ 目录
+
+## 代码质量规范
+
+### Linter 规则
+- 启用 flutter_lints 推荐规则
+- 禁止使用 print()，使用 debugPrint() 或日志库
+- 必须处理所有异步操作的错误
+- 避免使用 dynamic 类型，优先使用具体类型
+- 启用 prefer_single_quotes
+- 启用 avoid_print
+
+### 代码审查检查点
+- 代码是否遵循命名规范
+- 是否有未处理的异常
+- 是否有内存泄漏风险
+- 性能是否优化
+- 是否有重复代码
+
+## Git 提交规范
+
+### 提交信息格式
+<type>(<scope>): <subject>
+
+### Type 类型
+- feat: 新功能
+- fix: 修复 bug
+- docs: 文档更新
+- style: 代码格式调整
+- refactor: 代码重构
+- test: 测试相关
+- chore: 构建/工具链相关
+
+### 示例
+feat(checkin): 添加每日打卡功能
+fix(pomodoro): 修复番茄钟暂停后恢复时间错误
+
+## 注释规范
+
+### 文档注释
+- 公共 API 必须添加文档注释
+- 使用 /// 三斜杠注释
+- 复杂逻辑必须添加注释说明
+
+### 行内注释
+- 解释"为什么"而不是"是什么"
+- 避免显而易见的注释
+
+## 依赖管理规范
+
+### 版本策略
+- 使用精确版本：^1.2.3
+
+### 依赖添加规则
+- 添加新依赖前评估必要性
+- 优先使用官方维护的包
+- 定期更新依赖版本
+- 重大版本更新需要测试
+
+## 打卡功能规范
+
+### 打卡规则
+- 每日可多次打卡
+- 打卡时间记录精确到秒
+- 打卡数据本地存储
+- 打卡历史永久保留（可手动删除）
+
+### 打卡数据存储
+- 使用 SQLite (sqflite) 存储打卡记录
+- 表结构: id, date, time, note, created_at
+
+### 打卡验证
+- 无需位置验证
+- 无需照片验证
+- 支持添加备注
+
+## 番茄钟功能规范
+
+### 默认时长
+- 工作时长: 25 分钟
+- 短休息时长: 5 分钟
+- 长休息时长: 15 分钟
+- 长休息触发: 每 4 个番茄钟后
+
+### 番茄钟规则
+- 支持暂停/继续
+- 支持跳过当前番茄钟
+- 支持重置
+- 番茄钟结束后自动进入休息
+- 休息结束后提醒开始下一个番茄钟
+
+### 番茄钟数据存储
+- 使用 SQLite (sqflite) 存储番茄钟记录
+- 表结构: id, start_time, end_time, duration, type (work/short_break/long_break), completed, created_at
+
+## 数据存储规范
+
+### 本地存储方案
+- SQLite (sqflite) - 用于打卡和番茄钟记录
+- SharedPreferences - 用于用户设置和配置
+
+### 云端同步
+- 暂不支持云端同步
+
+### 数据加密
+- 暂不需要数据加密
+
+## 性能规范
+
+- 避免在 build 方法中进行耗时操作
+- 使用 const 构造函数优化性能
+- 图片资源使用适当尺寸
+- 列表使用 ListView.builder 处理长列表
+- 使用 FutureBuilder 和 StreamBuilder 处理异步数据
+
+## 国际化规范
+
+### 多语言支持
+- 暂不支持多语言，仅支持中文
+
+## 主题规范
+
+### 深色模式
+- 支持深色模式
+- 使用 ThemeData 的 brightness 属性切换
+- 主题设置存储在 SharedPreferences
+
+### 主题颜色
+- 主色调: 蓝色系
+- 辅助色: 根据功能区分（打卡-绿色，番茄钟-红色）
+
+## UI/UX 规范
+
+### 设计原则
+- Material Design 3
+- 简洁清晰的界面
+- 流畅的动画过渡
+- 友好的错误提示
+
+### 响应式设计
+- 支持不同屏幕尺寸
+- 适配横屏和竖屏
+
+## 测试规范
+
+### 测试覆盖率目标
+- 单元测试: 60%
+- Widget 测试: 40%
+- 集成测试: 20%
+
+### 测试文件位置
+- 单元测试: test/unit/
+- Widget 测试: test/widget/
+- 集成测试: test/integration/
+
+## 错误处理规范
+
+### 异常处理
+- 所有异步操作必须使用 try-catch
+- 向用户显示友好的错误信息
+- 记录错误日志（开发环境使用 debugPrint）
+
+### 空值处理
+- 使用 null safety
+- 避免使用 ! 强制解包，优先使用 ?. 或 ?? 操作符
+
+## 日志规范
+
+### 日志级别
+- debug: 开发调试信息
+- info: 重要操作信息
+- warning: 警告信息
+- error: 错误信息
+
+### 日志输出
+- 开发环境: 使用 debugPrint
+- 生产环境: 使用日志库（如 logger）
+
+## 版本管理规范
+
+### 版本号格式
+- 遵循语义化版本: MAJOR.MINOR.PATCH
+- 示例: 1.0.0, 1.1.0, 1.1.1
+
+### 版本发布
+- 主版本号: 不兼容的 API 修改
+- 次版本号: 向下兼容的功能性新增
+- 修订号: 向下兼容的问题修正
+
