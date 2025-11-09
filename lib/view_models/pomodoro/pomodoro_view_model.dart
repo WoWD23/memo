@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
+import '../../repositories/pomodoro_repository.dart';
+import '../../models/pomodoro_record.dart';
+import '../../services/notification_service.dart';
 
 /// 番茄钟模式
 enum PomodoroMode {
@@ -19,6 +22,9 @@ enum PomodoroState {
 
 /// 番茄钟ViewModel
 class PomodoroViewModel extends ChangeNotifier {
+  final PomodoroRepository _repository = PomodoroRepository();
+  final NotificationService _notificationService = NotificationService.instance;
+  
   Timer? _timer;
   Duration _remainingTime = Duration.zero;
   Duration _totalDuration = Duration.zero;
@@ -26,6 +32,7 @@ class PomodoroViewModel extends ChangeNotifier {
   PomodoroState _state = PomodoroState.idle;
   bool _isLocked = false; // 是否锁定（倒计时期间）
   int _completedPomodoros = 0; // 完成的番茄钟数量
+  DateTime? _startedAt; // 开始时间
 
   // Getters
   Duration get remainingTime => _remainingTime;
@@ -79,6 +86,7 @@ class PomodoroViewModel extends ChangeNotifier {
     _state = PomodoroState.running;
     _isLocked = true; // 锁定界面
     _mode = PomodoroMode.work; // 默认工作模式
+    _startedAt = DateTime.now(); // 记录开始时间
 
     debugPrint('PomodoroViewModel.startCountdown: state=$_state, remainingTime=$_remainingTime, totalTime=$_totalDuration');
     
@@ -121,12 +129,18 @@ class PomodoroViewModel extends ChangeNotifier {
 
   /// 取消倒计时
   void cancel() {
+    // 保存未完成的记录
+    if (_startedAt != null && _mode == PomodoroMode.work) {
+      _saveRecord(completed: false);
+    }
+    
     _timer?.cancel();
     _timer = null;
     _remainingTime = Duration.zero;
     _totalDuration = Duration.zero;
     _state = PomodoroState.idle;
     _isLocked = false; // 解锁界面
+    _startedAt = null;
     notifyListeners();
   }
 
@@ -165,6 +179,12 @@ class PomodoroViewModel extends ChangeNotifier {
     _state = PomodoroState.completed;
 
     if (_mode == PomodoroMode.work) {
+      // 保存完成的工作记录
+      _saveRecord(completed: true);
+      
+      // 显示番茄钟完成通知
+      _notificationService.showPomodoroCompleteNotification();
+      
       _completedPomodoros++;
       // 每4个工作后进入长休息
       if (_completedPomodoros % AppConstants.pomodorosUntilLongBreak == 0) {
@@ -174,16 +194,59 @@ class PomodoroViewModel extends ChangeNotifier {
         _mode = PomodoroMode.shortBreak;
         _remainingTime = Duration(minutes: AppConstants.pomodoroShortBreakDuration);
       }
+      
+      // 重置开始时间
+      _startedAt = DateTime.now();
+      
       // 自动开始休息倒计时
       _state = PomodoroState.running;
       _startTimer();
     } else {
+      // 保存完成的休息记录
+      _saveRecord(completed: true);
+      
+      // 显示休息结束通知
+      _notificationService.showBreakEndNotification();
+      
       // 休息结束，回到工作模式
       _mode = PomodoroMode.work;
       _isLocked = false; // 解锁界面
+      _startedAt = null;
     }
 
     notifyListeners();
+  }
+  
+  /// 保存番茄钟记录到数据库
+  Future<void> _saveRecord({required bool completed}) async {
+    if (_startedAt == null) return;
+    
+    try {
+      final record = PomodoroRecord(
+        durationMinutes: _totalDuration.inMinutes,
+        mode: _modeToString(_mode),
+        completed: completed,
+        startedAt: _startedAt!,
+        endedAt: DateTime.now(),
+      );
+      
+      await _repository.create(record);
+      debugPrint('番茄钟记录已保存: mode=$_mode, completed=$completed, duration=${_totalDuration.inMinutes}分钟');
+    } catch (e) {
+      debugPrint('保存番茄钟记录失败: $e');
+    }
+  }
+  
+  /// 将模式转换为字符串
+  String _modeToString(PomodoroMode mode) {
+    switch (mode) {
+      case PomodoroMode.work:
+        return 'work';
+      case PomodoroMode.shortBreak:
+        return 'shortBreak';
+      case PomodoroMode.longBreak:
+        return 'longBreak';
+    }
   }
 
   @override

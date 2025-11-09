@@ -1,5 +1,5 @@
 name: memo
-description: "A new Flutter project."
+description: "Memo - 效率管理应用。集成打卡、番茄钟和待办事项管理，帮助你养成良好的时间管理习惯。"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -58,6 +58,9 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+  
+  # 图标生成工具
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -100,3 +103,25 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Flutter Launcher Icons 配置
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "lib/images/memo_icon.png"
+  # Windows 图标
+  windows:
+    generate: true
+    image_path: "lib/images/memo_icon.png"
+  # macOS 图标
+  macos:
+    generate: true
+    image_path: "lib/images/memo_icon.png"
+  # Linux 图标  
+  linux:
+    generate: true
+    image_path: "lib/images/memo_icon.png"
+  # Web 图标
+  web:
+    generate: true
+    image_path: "lib/images/memo_icon.png"

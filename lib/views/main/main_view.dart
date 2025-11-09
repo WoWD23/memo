@@ -7,6 +7,7 @@ import '../settings/settings_view.dart';
 import '../todo/todo_view.dart';
 import '../../widgets/navigation/custom_bottom_nav_bar.dart';
 import '../../view_models/pomodoro/pomodoro_view_model.dart';
+import '../../view_models/navigation_view_model.dart';
 
 /// 主页面视图（包含底部导航栏）
 class MainView extends StatefulWidget {
@@ -17,7 +18,6 @@ class MainView extends StatefulWidget {
 }
 
 class _MainViewState extends State<MainView> {
-  int _currentIndex = 0;
   PomodoroViewModel? _pomodoroViewModel;
 
   final List<Widget> _pages = const [
@@ -28,26 +28,24 @@ class _MainViewState extends State<MainView> {
     SettingsView(), // setting - 设置（第五个）
   ];
 
-  void _onTabTapped(int index) {
+  void _onTabTapped(int index, NavigationViewModel navViewModel) {
     // 如果番茄钟正在运行且锁定，不允许切换Tab
     if (_pomodoroViewModel != null && _pomodoroViewModel!.isLocked) {
       return;
     }
     
-    setState(() {
-      _currentIndex = index;
-    });
+    navViewModel.switchToTab(index);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PomodoroViewModel>(
-      builder: (context, pomodoroViewModel, child) {
+    return Consumer2<NavigationViewModel, PomodoroViewModel>(
+      builder: (context, navViewModel, pomodoroViewModel, child) {
         _pomodoroViewModel = pomodoroViewModel;
         
         return Scaffold(
           body: IndexedStack(
-            index: _currentIndex,
+            index: navViewModel.currentIndex,
             children: _pages,
           ),
           bottomNavigationBar: IgnorePointer(
@@ -56,8 +54,8 @@ class _MainViewState extends State<MainView> {
             child: Opacity(
               opacity: pomodoroViewModel.isLocked ? 0.5 : 1.0,
               child: CustomBottomNavBar(
-                currentIndex: _currentIndex,
-                onTap: _onTabTapped,
+                currentIndex: navViewModel.currentIndex,
+                onTap: (index) => _onTabTapped(index, navViewModel),
               ),
             ),
           ),

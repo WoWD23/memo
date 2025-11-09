@@ -29,6 +29,7 @@ class _ClockFaceState extends State<ClockFace> {
   late int _hour;
   late int _minute;
   int _selectedMinutes = 0; // 选择的分钟数（0-120）
+  int _lastSelectedMinutes = 0; // 记录上一次选择的分钟数，用于判断方向
 
   @override
   void initState() {
@@ -36,6 +37,7 @@ class _ClockFaceState extends State<ClockFace> {
     _hour = widget.selectedHour;
     _minute = widget.selectedMinute;
     _selectedMinutes = _hour * 60 + _minute;
+    _lastSelectedMinutes = _selectedMinutes;
     // 限制在0-120分钟之间
     if (_selectedMinutes > 120) _selectedMinutes = 120;
   }
@@ -71,37 +73,61 @@ class _ClockFaceState extends State<ClockFace> {
     // 只在时钟盘边缘区域响应（避免中心区域误触）
     if (distance > radius * 0.3 && distance < radius * 0.9) {
       // 将角度转换为分钟数（0-120分钟，一圈对应120分钟）
-      // angle的范围：0到2π
-      // 0分钟在12点（angle = -π/2，归一化后 = 3π/2）
-      // 需要将角度归一化到0-2π范围
       double normalizedAngle = angle;
       if (normalizedAngle < 0) normalizedAngle += 2 * math.pi;
       
-      // 将角度转换为分钟数
-      // 12点位置（3π/2）对应0分钟
-      // 需要调整：从12点开始顺时针
+      // 将角度转换为分钟数（从12点开始顺时针）
       double minutesFromAngle = (normalizedAngle / (2 * math.pi)) * 120;
       
-      // 处理12点位置的特殊情况（0分钟和120分钟在同一个位置）
-      // 如果角度接近12点（3π/2），需要判断是0分钟还是120分钟
-      // 根据当前位置判断：如果当前选择接近120，则设为120；否则设为0
-      if (minutesFromAngle > 118) {
-        // 非常接近120分钟位置
-        minutesFromAngle = 120;
-      } else if (minutesFromAngle < 2) {
-        // 非常接近0分钟位置
-        minutesFromAngle = 0;
-      }
-      
-      // 四舍五入到最接近的分钟（支持每分钟精度）
+      // 四舍五入到最接近的分钟
       int newMinutes = minutesFromAngle.round();
       
       // 限制在0-120分钟之间
       if (newMinutes < 0) newMinutes = 0;
       if (newMinutes > 120) newMinutes = 120;
       
+      // 核心逻辑：限制在0和120的边界
+      // 1. 从120顺时针到0 - 禁止
+      // 2. 从0逆时针到120 - 禁止
+      // 3. 从120逆时针到0 - 允许
+      // 4. 从0顺时针到120 - 允许
+      
+      // 当前在120分钟时
+      if (_selectedMinutes == 120) {
+        // 如果新值在0-15之间，说明是从12点位置继续顺时针 - 不允许！
+        if (newMinutes >= 0 && newMinutes <= 15) {
+          newMinutes = 120;  // 保持在120
+        }
+        // 如果新值在16-119之间，说明是逆时针回调 - 允许
+      }
+      // 当前在0分钟时
+      else if (_selectedMinutes == 0) {
+        // 如果新值在105-120之间，说明是从12点位置逆时针旋转 - 不允许！
+        if (newMinutes >= 105 && newMinutes <= 120) {
+          newMinutes = 0;  // 保持在0
+        }
+        // 如果新值在1-104之间，说明是顺时针 - 允许
+      }
+      // 当前在1-15分钟之间，且新值在105-120之间
+      else if (_selectedMinutes >= 1 && _selectedMinutes <= 15 && newMinutes >= 105) {
+        // 这可能是从小值逆时针快速拖动到120 - 不允许！
+        // 保持当前值或设为0
+        newMinutes = _selectedMinutes;
+      }
+      // 当前在115-119分钟之间，且新值在0-10之间
+      else if (_selectedMinutes >= 115 && _selectedMinutes < 120 && newMinutes <= 10) {
+        // 这是顺时针从115-119想要到120到0 - 应该停在120
+        newMinutes = 120;
+      }
+      // 当前在105-119分钟，且新值在0-1之间
+      else if (_selectedMinutes >= 105 && _selectedMinutes < 120 && newMinutes <= 1) {
+        // 快速拖动跨越了120和0 - 停在120
+        newMinutes = 120;
+      }
+      
       if (newMinutes != _selectedMinutes) {
         setState(() {
+          _lastSelectedMinutes = _selectedMinutes;
           _selectedMinutes = newMinutes;
           // 转换为小时和分钟
           _hour = newMinutes ~/ 60;
@@ -217,6 +243,78 @@ class _ClockFacePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = isMajorTick ? 2.5 : (isMediumTick ? 1.5 : 1.0);
       canvas.drawLine(tickStart, tickEnd, tickPaint);
+    }
+    
+    // 计算选中角度（用于后续绘制）
+    double selectedAngle;
+    if (selectedMinutes == 120) {
+      selectedAngle = -math.pi / 2;
+    } else {
+      selectedAngle = (selectedMinutes / 120.0 * 2 * math.pi) - (math.pi / 2);
+    }
+    
+    // 绘制进度弧（从0到当前选择时间）
+    if (selectedMinutes > 0) {
+      final progressPaint = Paint()
+        ..color = AppColors.pomodoro.withValues(alpha: 0.15)
+        ..style = PaintingStyle.fill;
+      
+      // 绘制从12点到当前选择位置的扇形
+      final startAngle = -math.pi / 2; // 从12点开始
+      final sweepAngle = selectedMinutes == 120 
+          ? 2 * math.pi // 120分钟时绘制整个圆
+          : (selectedMinutes / 120.0 * 2 * math.pi); // 否则按比例
+      
+      // 创建扇形路径
+      final path = Path()
+        ..moveTo(center.dx, center.dy) // 移动到圆心
+        ..arcTo(
+          Rect.fromCircle(center: center, radius: radius * 0.92),
+          startAngle,
+          sweepAngle,
+          false,
+        )
+        ..close();
+      
+      canvas.drawPath(path, progressPaint);
+      
+      // 绘制进度弧的边缘线（更清晰）
+      final progressBorderPaint = Paint()
+        ..color = AppColors.pomodoro.withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round;
+      
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius * 0.92),
+        startAngle,
+        sweepAngle,
+        false,
+        progressBorderPaint,
+      );
+    }
+    
+    // 先绘制指针（在数字之前，这样数字就不会被挡住）
+    final pointerPaint = Paint()
+      ..color = AppColors.primaryDark
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4;
+    final pointerEnd = Offset(
+      center.dx + (radius * 0.68) * math.cos(selectedAngle),
+      center.dy + (radius * 0.68) * math.sin(selectedAngle),
+    );
+    canvas.drawLine(center, pointerEnd, pointerPaint);
+    
+    // 绘制指针末端圆点
+    final pointerDotPaint = Paint()
+      ..color = AppColors.primaryDark
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(pointerEnd, 5, pointerDotPaint);
+    
+    // 现在绘制数字（在指针之后，会覆盖指针）
+    for (int minutes = 0; minutes < 120; minutes++) {
+      final angle = (minutes / 120.0 * 2 * math.pi) - (math.pi / 2);
+      final isMajorTick = minutes % 20 == 0;
       
       // 绘制主要刻度数字
       if (isMajorTick && minutes > 0) {
@@ -282,17 +380,7 @@ class _ClockFacePainter extends CustomPainter {
       );
     }
     
-    // 绘制选中位置的指示器
-    // 计算角度：0分钟和120分钟都在12点位置（-π/2）
-    double selectedAngle;
-    if (selectedMinutes == 120) {
-      // 120分钟转完一圈，回到12点
-      selectedAngle = -math.pi / 2;
-    } else {
-      // 0-119分钟，从12点开始顺时针
-      selectedAngle = (selectedMinutes / 120.0 * 2 * math.pi) - (math.pi / 2);
-    }
-    
+    // 最后绘制选中位置的指示器（最顶层）
     final indicatorRadius = radius * 0.75;
     final indicatorPosition = Offset(
       center.dx + indicatorRadius * math.cos(selectedAngle),
@@ -326,23 +414,6 @@ class _ClockFacePainter extends CustomPainter {
         indicatorPosition.dy - selectedTextPainter.height / 2,
       ),
     );
-
-    // 绘制指针（从中心指向选中的位置）
-    final pointerPaint = Paint()
-      ..color = AppColors.primaryDark
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
-    final pointerEnd = Offset(
-      center.dx + (radius * 0.7) * math.cos(selectedAngle),
-      center.dy + (radius * 0.7) * math.sin(selectedAngle),
-    );
-    canvas.drawLine(center, pointerEnd, pointerPaint);
-    
-    // 绘制指针末端圆点
-    final pointerDotPaint = Paint()
-      ..color = AppColors.primaryDark
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(pointerEnd, 6, pointerDotPaint);
   }
 
   /// 绘制倒计时模式
@@ -354,36 +425,29 @@ class _ClockFacePainter extends CustomPainter {
     final remainingSeconds = remainingTime!.inSeconds % 60;
     final progress = totalMinutes > 0 ? (remainingMinutes / totalMinutes).clamp(0.0, 1.0) : 0.0;
 
+    // 先绘制完整的时钟盘（和选择模式一样）
+    _paintSelectionMode(canvas, size, center, radius);
+
     // 计算剩余时间对应的角度（从选择的位置开始，倒转回12点）
-    // 选择的时间位置：totalMinutes / 120 * 360度（从12点开始，顺时针）
-    // 剩余时间比例：progress
-    // 当前指针角度：从选择位置倒转回12点
-    
-    // 选择的位置角度（从12点开始，顺时针）
-    // 0分钟在12点（-90度），120分钟转完一圈回到12点（-90度）
     double selectedAngle;
     if (totalMinutes == 120) {
-      // 120分钟转完一圈，回到12点
       selectedAngle = -math.pi / 2;
     } else {
-      // 0-119分钟，从12点开始顺时针
       selectedAngle = (totalMinutes / 120.0 * 2 * math.pi) - (math.pi / 2);
     }
     
     // 当前指针角度（从选择位置倒转回12点）
-    // progress = 1.0 时，角度 = selectedAngle（选择的位置）
-    // progress = 0.0 时，角度 = -90度（12点）
-    final twelveOClockAngle = -math.pi / 2; // 12点位置
+    final twelveOClockAngle = -math.pi / 2;
     final angleRange = selectedAngle - twelveOClockAngle;
     final currentAngle = twelveOClockAngle + angleRange * progress;
 
-    // 绘制进度圆弧（已过时间，从选择位置到当前位置）
+    // 绘制进度圆弧（覆盖在时钟盘上）
     final progressPaint = Paint()
-      ..color = AppColors.primaryLight.withValues(alpha: 0.3)
+      ..color = AppColors.pomodoro.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 8;
     
-    // 绘制从当前指针位置到选择位置的圆弧（已过时间）
+    // 从当前指针位置到选择位置的圆弧（已过时间）
     final arcStartAngle = currentAngle;
     final sweepAngle = selectedAngle - currentAngle;
     canvas.drawArc(
@@ -393,46 +457,25 @@ class _ClockFacePainter extends CustomPainter {
       false,
       progressPaint,
     );
-    
-    // 绘制分钟刻度（倒计时模式下也显示，但更淡）
-    for (int minutes = 0; minutes <= 120; minutes += 20) {
-      final tickAngle = (minutes / 120.0 * 2 * math.pi) - (math.pi / 2);
-      final tickStartRadius = radius * 0.85;
-      final tickEndRadius = radius * 0.9;
-      
-      final tickStart = Offset(
-        center.dx + tickStartRadius * math.cos(tickAngle),
-        center.dy + tickStartRadius * math.sin(tickAngle),
-      );
-      final tickEnd = Offset(
-        center.dx + tickEndRadius * math.cos(tickAngle),
-        center.dy + tickEndRadius * math.sin(tickAngle),
-      );
-      
-      final tickPaint = Paint()
-        ..color = AppColors.textSecondary.withValues(alpha: 0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
-      canvas.drawLine(tickStart, tickEnd, tickPaint);
-    }
+
+    // 在时钟中心绘制半透明背景圆（让倒计时数字更清晰）
+    final backgroundCirclePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.95)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius * 0.45, backgroundCirclePaint);
 
     // 在时钟中心显示倒计时数字（MM:SS格式，大字体）
-    final totalMinutesDisplay = totalMinutes;
-    final minutesDisplay = remainingMinutes;
-    final secondsDisplay = remainingSeconds;
-    
-    // 显示格式：MM:SS（如果总时间小于1小时）或 HH:MM:SS（如果总时间大于1小时）
-    final timeText = totalMinutesDisplay < 60
-        ? '${minutesDisplay.toString().padLeft(2, '0')}:${secondsDisplay.toString().padLeft(2, '0')}'
-        : '${(remainingMinutes ~/ 60).toString().padLeft(2, '0')}:${(remainingMinutes % 60).toString().padLeft(2, '0')}:${secondsDisplay.toString().padLeft(2, '0')}';
+    final timeText = totalMinutes < 60
+        ? '${remainingMinutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}'
+        : '${(remainingMinutes ~/ 60).toString().padLeft(2, '0')}:${(remainingMinutes % 60).toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
     
     final timeTextPainter = TextPainter(
       text: TextSpan(
         text: timeText,
         style: TextStyle(
-          fontSize: totalMinutesDisplay < 60 ? 48 : 40,
+          fontSize: totalMinutes < 60 ? 42 : 36,
           fontWeight: FontWeight.bold,
-          color: AppColors.primaryDark,
+          color: AppColors.pomodoro,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -447,26 +490,26 @@ class _ClockFacePainter extends CustomPainter {
       ),
     );
 
-    // 绘制倒计时指针（从选择位置倒转回12点）
-    final pointerPaint = Paint()
-      ..color = AppColors.primaryDark
+    // 绘制动态指针（跟随倒计时移动）
+    final dynamicPointerPaint = Paint()
+      ..color = AppColors.pomodoro
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
+      ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
-    final pointerEnd = Offset(
+    final dynamicPointerEnd = Offset(
       center.dx + (radius * 0.65) * math.cos(currentAngle),
       center.dy + (radius * 0.65) * math.sin(currentAngle),
     );
-    canvas.drawLine(center, pointerEnd, pointerPaint);
+    canvas.drawLine(center, dynamicPointerEnd, dynamicPointerPaint);
 
-    // 绘制指针末端圆点
-    final pointerDotPaint = Paint()
-      ..color = AppColors.primaryDark
+    // 绘制动态指针末端圆点
+    final dynamicPointerDotPaint = Paint()
+      ..color = AppColors.pomodoro
       ..style = PaintingStyle.fill;
-    canvas.drawCircle(pointerEnd, 8, pointerDotPaint);
+    canvas.drawCircle(dynamicPointerEnd, 6, dynamicPointerDotPaint);
     
     // 绘制中心圆点
-    canvas.drawCircle(center, 6, pointerDotPaint);
+    canvas.drawCircle(center, 4, dynamicPointerDotPaint);
   }
 
   @override

@@ -10,6 +10,7 @@ import 'clock_face.dart';
 class ClockTimePicker extends StatefulWidget {
   final Function(Duration) onTimeSelected;
   final VoidCallback? onCancel;
+  final VoidCallback? onCalendarTap; // 点击日历按钮回调
   final Duration? remainingTime; // 倒计时剩余时间
   final Duration? totalTime; // 总时间
 
@@ -17,6 +18,7 @@ class ClockTimePicker extends StatefulWidget {
     super.key,
     required this.onTimeSelected,
     this.onCancel,
+    this.onCalendarTap,
     this.remainingTime,
     this.totalTime,
   });
@@ -263,11 +265,9 @@ class _ClockTimePickerState extends State<ClockTimePicker> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // 日历图标按钮（可选）
+        // 日历图标按钮（跳转到日历Tab）
         IconButton(
-          onPressed: () {
-            // TODO: 打开日期选择器
-          },
+          onPressed: widget.onCalendarTap,
           icon: const Icon(
             Icons.calendar_today,
             color: AppColors.textSecondary,

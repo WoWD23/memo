@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/pomodoro/time_picker/clock_time_picker.dart';
 import '../../view_models/pomodoro/pomodoro_view_model.dart';
+import '../../view_models/navigation_view_model.dart';
 
 /// 番茄钟视图
 class PomodoroView extends StatefulWidget {
@@ -14,6 +15,9 @@ class PomodoroView extends StatefulWidget {
 class _PomodoroViewState extends State<PomodoroView> {
   @override
   Widget build(BuildContext context) {
+    // 获取 NavigationViewModel 用于跳转到日历 tab
+    final navigationViewModel = Provider.of<NavigationViewModel>(context, listen: false);
+    
     return Consumer<PomodoroViewModel>(
       builder: (context, viewModel, child) {
         // 确保在同一个页面内，根据状态切换显示内容
@@ -59,6 +63,10 @@ class _PomodoroViewState extends State<PomodoroView> {
                       // 倒计时模式下显示取消确认对话框
                       _showCancelDialog(context, viewModel);
                     }
+                  },
+                  onCalendarTap: () {
+                    // 点击日历按钮，跳转到日历 tab
+                    navigationViewModel.switchToCalendar();
                   },
                   remainingTime: isCountdownMode ? viewModel.remainingTime : null,
                   totalTime: isCountdownMode ? viewModel.totalDuration : null,
