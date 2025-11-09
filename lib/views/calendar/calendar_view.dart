@@ -7,6 +7,8 @@ import '../../core/theme/app_colors.dart';
 import 'calendar_types.dart';
 import 'calendar_compact_view.dart';
 import 'calendar_stacked_view.dart';
+import 'calendar_detailed_view.dart';
+import 'calendar_list_view.dart';
 import 'calendar_placeholder_view.dart';
 
 /// 日历视图
@@ -23,7 +25,7 @@ class _CalendarViewState extends State<CalendarView> {
 
   // 视图模式
   CalendarViewMode _viewMode = CalendarViewMode.compact;
-  CalendarViewMode _previousViewMode = CalendarViewMode.compact; // 记录之前的视图模式
+  CalendarViewMode? _previousViewMode; // 记录之前的视图模式（可为空）
   CalendarDisplayState _displayState = CalendarDisplayState.collapsed;
   
   // 数据
@@ -64,7 +66,12 @@ class _CalendarViewState extends State<CalendarView> {
     final offset = _scrollController.offset;
     
     // 根据视图模式使用不同的月份高度
-    final monthHeight = _viewMode == CalendarViewMode.stacked ? 460.0 : 400.0;
+    final monthHeight = switch (_viewMode) {
+      CalendarViewMode.stacked => 466.0,
+      CalendarViewMode.detailed => 540.0,
+      CalendarViewMode.list => 268.0,
+      _ => 403.0,
+    };
     
     // 计算当前滚动到第几个月（索引0-24，其中12是当前月）
     // 使用 floor 而不是 round，避免过于敏感
@@ -96,7 +103,8 @@ class _CalendarViewState extends State<CalendarView> {
   void _scrollToCurrentMonth({bool force = false}) {
     if (!mounted) return;
     if (!force && _hasScrolledToCurrentMonth) return;
-    debugPrint('📍 滚动到当前月份: $_selectedMonth, 视图模式: $_viewMode, 强制: $force');
+    final now = DateTime.now();
+    debugPrint('📍 滚动到当前月份: $_selectedMonth, 当前实际月份: ${now.year}年${now.month}月, 视图模式: $_viewMode, 强制: $force');
     _scrollToMonth(_selectedMonth);
     if (!force) _hasScrolledToCurrentMonth = true;
   }
@@ -113,26 +121,44 @@ class _CalendarViewState extends State<CalendarView> {
     
     if (targetIndex < 0 || targetIndex > 24) return;
     
-    // 叠放视图和紧凑视图使用不同的月份高度估算
-    // 注意：叠放视图的图例在 ListView 外部，不影响滚动计算
+    // 不同视图使用不同的月份高度估算
     double estimatedMonthHeight;
-    if (_viewMode == CalendarViewMode.stacked) {
-      // 叠放视图每个月：月份标题(60) + 星期标题(28) + 日期网格(约350-380) ≈ 460px
-      estimatedMonthHeight = 460.0;
-    } else {
-      // 紧凑视图
-      estimatedMonthHeight = 400.0;
+    switch (_viewMode) {
+      case CalendarViewMode.stacked:
+        // 叠放视图每个月：月份标题(60) + 星期标题(28) + 日期网格(约350-380) ≈ 465px
+        estimatedMonthHeight = 466.0;
+        break;
+      case CalendarViewMode.detailed:
+        // 详细信息视图每个月：月份标题(60) + 星期标题(28) + 日期网格(5-6周*80px) + padding ≈ 540px
+        estimatedMonthHeight = 540.0;
+        break;
+      case CalendarViewMode.list:
+        // 列表视图每个月（仅上半部分日历）：月份标题(36) + 星期标题(28) + 日期网格(6周*44) ≈ 268px
+        estimatedMonthHeight = 268.0;
+        break;
+      case CalendarViewMode.compact:
+      default:
+        // 紧凑视图
+        estimatedMonthHeight = 403.0;
+        break;
     }
     
     final targetOffset = targetIndex * estimatedMonthHeight;
     
-    debugPrint('📏 目标月份: $targetMonth, 索引: $targetIndex, 视图: $_viewMode, 估计高度: $estimatedMonthHeight, 目标偏移: $targetOffset');
+    debugPrint('📏 目标月份: $targetMonth, 当前月: $currentMonth, 月份差: $monthDiff, 索引: $targetIndex, 视图: $_viewMode, 估计高度: $estimatedMonthHeight, 目标偏移: $targetOffset');
     
     try {
       if (_scrollController.position.hasContentDimensions) {
         final clampedOffset = targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent);
         debugPrint('🔄 实际滚动偏移: $clampedOffset (最大: ${_scrollController.position.maxScrollExtent})');
         _scrollController.jumpTo(clampedOffset);
+        
+        // 滚动后验证位置
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            debugPrint('✅ 滚动完成，当前偏移: ${_scrollController.offset}');
+          }
+        });
       } else {
         _scrollController.jumpTo(targetOffset);
       }
@@ -340,7 +366,10 @@ class _CalendarViewState extends State<CalendarView> {
                 setState(() {
                   _displayState = CalendarDisplayState.collapsed;
                   // 恢复之前的视图模式
-                  _viewMode = _previousViewMode;
+                  if (_previousViewMode != null) {
+                    _viewMode = _previousViewMode!;
+                    _previousViewMode = null;
+                  }
                   _displayedMonth = scrollToMonth;
                   _selectedDate = null;
                 });
@@ -375,10 +404,15 @@ class _CalendarViewState extends State<CalendarView> {
             itemBuilder: (context) => [
               _buildViewModeMenuItem(CalendarViewMode.compact, '紧凑', Icons.view_compact),
               _buildViewModeMenuItem(CalendarViewMode.stacked, '叠放', Icons.view_agenda),
-              _buildViewModeMenuItem(CalendarViewMode.detailed, '详细信息', Icons.view_module, enabled: false),
-              _buildViewModeMenuItem(CalendarViewMode.list, '列表', Icons.view_list, enabled: false),
+              _buildViewModeMenuItem(CalendarViewMode.detailed, '详细', Icons.view_module),
+              _buildViewModeMenuItem(CalendarViewMode.list, '列表', Icons.view_list),
             ],
             onSelected: (mode) {
+              // 先重置滚动位置
+              if (_scrollController.hasClients) {
+                _scrollController.jumpTo(0);
+              }
+              
               setState(() {
                 _viewMode = mode;
                 _displayState = CalendarDisplayState.collapsed;
@@ -391,9 +425,7 @@ class _CalendarViewState extends State<CalendarView> {
               
               // 切换视图后滚动到当前月份
               // 使用 force: true 强制滚动，因为不同视图的月份高度不同
-              // 使用多个延迟来确保视图完全渲染
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                // 第一帧后等待布局完成
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted) {
                     _scrollToCurrentMonth(force: true);
@@ -495,10 +527,20 @@ class _CalendarViewState extends State<CalendarView> {
             setState(() {
               _displayState = CalendarDisplayState.collapsed;
               _selectedDate = null;
+              // 恢复到之前的视图模式
+              if (_previousViewMode != null) {
+                _viewMode = _previousViewMode!;
+                _previousViewMode = null;
+              }
               // 返回时根据当前滚动位置更新显示月份
               if (_scrollController.hasClients) {
                 final offset = _scrollController.offset;
-                final monthHeight = _viewMode == CalendarViewMode.stacked ? 460.0 : 400.0;
+                final monthHeight = switch (_viewMode) {
+                  CalendarViewMode.stacked => 466.0,
+                  CalendarViewMode.detailed => 540.0,
+                  CalendarViewMode.list => 268.0,
+                  _ => 403.0,
+                };
                 final currentIndex = (offset / monthHeight + 0.3).floor();
                 final currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
                 _displayedMonth = DateTime(currentMonth.year, currentMonth.month + currentIndex - 12, 1);
@@ -523,19 +565,38 @@ class _CalendarViewState extends State<CalendarView> {
               _displayedMonth = DateTime(date.year, date.month, 1);
             });
           },
-          onViewModeChange: () {
+        );
+      
+      case CalendarViewMode.detailed:
+        return CalendarDetailedView(
+          selectedMonth: _selectedMonth,
+          checkIns: _checkIns,
+          pomodoroRecords: _pomodoroRecords,
+          pomodoroCountByDate: _pomodoroCountByDate,
+          todoCountByDate: _todoCountByDate,
+          testTodos: _testTodos,
+          scrollController: _scrollController,
+          onDateSelected: (date) {
             setState(() {
-              _previousViewMode = _viewMode;
-              _viewMode = CalendarViewMode.compact;
+              _previousViewMode = _viewMode; // 保存当前视图模式
+              _selectedDate = date;
+              _displayState = CalendarDisplayState.expanded;
+              _viewMode = CalendarViewMode.compact; // 切换到紧凑视图查看详情
+              _displayedMonth = DateTime(date.year, date.month, 1);
             });
           },
         );
       
-      case CalendarViewMode.detailed:
-        return const CalendarPlaceholderView(title: '详细信息视图');
-      
       case CalendarViewMode.list:
-        return const CalendarPlaceholderView(title: '列表视图');
+        return CalendarListView(
+          selectedMonth: _selectedMonth,
+          checkIns: _checkIns,
+          pomodoroRecords: _pomodoroRecords,
+          pomodoroCountByDate: _pomodoroCountByDate,
+          todoCountByDate: _todoCountByDate,
+          testTodos: _testTodos,
+          scrollController: _scrollController,
+        );
     }
   }
 }

@@ -10,7 +10,6 @@ class CalendarStackedView extends StatelessWidget {
   final Map<String, int> todoCountByDate;
   final ScrollController scrollController;
   final Function(DateTime date) onDateSelected;
-  final VoidCallback onViewModeChange;
 
   const CalendarStackedView({
     super.key,
@@ -20,7 +19,6 @@ class CalendarStackedView extends StatelessWidget {
     required this.todoCountByDate,
     required this.scrollController,
     required this.onDateSelected,
-    required this.onViewModeChange,
   });
 
   @override
@@ -31,65 +29,13 @@ class CalendarStackedView extends StatelessWidget {
       months.add(DateTime(selectedMonth.year, selectedMonth.month + i, 1));
     }
 
-    return Column(
-      children: [
-        _buildStackedLegend(),
-        Expanded(
-          child: ListView.builder(
-            controller: scrollController,
-            itemCount: months.length,
-            itemBuilder: (context, index) {
-              final month = months[index];
-              return _buildStackedMonthSection(month);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 叠放视图图例
-  Widget _buildStackedLegend() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: Colors.white,
-      child: Row(
-        children: [
-          const Text(
-            '图例：',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 12),
-          _buildStackedLegendItem(Colors.green, '打卡'),
-          const SizedBox(width: 12),
-          _buildStackedLegendItem(Colors.orange, '番茄钟'),
-          const SizedBox(width: 12),
-          _buildStackedLegendItem(Colors.blue, '待办'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStackedLegendItem(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 16,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12),
-        ),
-      ],
+    return ListView.builder(
+      controller: scrollController,
+      itemCount: months.length,
+      itemBuilder: (context, index) {
+        final month = months[index];
+        return _buildStackedMonthSection(month);
+      },
     );
   }
 
@@ -257,7 +203,6 @@ class CalendarStackedView extends StatelessWidget {
           return Expanded(
             child: GestureDetector(
               onTap: hasEvent ? () {
-                onViewModeChange();
                 onDateSelected(date);
               } : null,
               child: Container(
