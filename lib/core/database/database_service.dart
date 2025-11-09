@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'dart:io' show Platform;
 
 /// 数据库服务
 class DatabaseService {
@@ -17,14 +18,24 @@ class DatabaseService {
 
   /// 初始化数据库
   Future<Database> _initDB(String filePath) async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, filePath);
+    String path;
+    
+    // 桌面平台使用不同的路径获取方式
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      final dbPath = await databaseFactory.getDatabasesPath();
+      path = join(dbPath, filePath);
+    } else {
+      final dbPath = await getDatabasesPath();
+      path = join(dbPath, filePath);
+    }
 
-    return await openDatabase(
+    return await databaseFactory.openDatabase(
       path,
-      version: 2,
-      onCreate: _createDB,
-      onUpgrade: _upgradeDB,
+      options: OpenDatabaseOptions(
+        version: 2,
+        onCreate: _createDB,
+        onUpgrade: _upgradeDB,
+      ),
     );
   }
 

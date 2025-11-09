@@ -40,6 +40,7 @@ dependencies:
 
   # 数据库
   sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.0+2
   path: ^1.8.3
 
   # 本地存储
