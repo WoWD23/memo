@@ -1,116 +1,347 @@
-# 2025-11-09 日历功能更新说明
+# 2025-11-09 日历系统更新说明
 
 ## 📝 本次更新概览
 
-本次更新完成了日历视图的核心功能开发，实现了多种视图模式、代码重构、跨平台支持等重要特性。
+本次更新完成了日历视图系统的重大升级，实现了四种不同的日历展示方案，灵感来自 Apple Calendar。整个系统经过精心设计和调试，提供了流畅的用户体验和直观的事件管理功能。
 
 ---
 
 ## ✨ 新增功能
 
-### 1. 日历多视图系统
+### 1. 四种日历视图模式
 
-仿照 Apple 日历系统，实现了四种日历显示方案：
+#### 1.1 紧凑视图 (Compact View)
+**特点**：
+- 月历网格显示，每个日期用小圆圈标记事件
+- 点击日期展开显示 24 小时时间轴详情
+- 支持上下滑动查看前后 12 个月
+- 事件类型：绿色圆圈（打卡）、橙色圆圈（番茄钟）、蓝色圆圈（待办）
 
-#### 1.1 紧凑视图（Compact View）
-- **月份网格显示**：纵向滚动查看多个月份
-- **事件圆点标记**：不同颜色表示不同事件类型
-  - 🟢 绿色：打卡事件
-  - 🟠 橙色：番茄钟事件
-  - 🔵 蓝色：待办事项
-- **展开详情功能**：点击日期展开显示24小时时间轴
-  - 显示全天事件（打卡）
-  - 显示具体时间段事件（番茄钟、待办事项）
-  - 包含迷你周视图导航
+**详情页功能**：
+- 迷你周视图（快速切换日期）
+- 全天事件区域（显示打卡）
+- 24 小时时间轴（显示番茄钟和待办事件）
+- 事件卡片显示时间段和标题
 
-#### 1.2 叠放视图（Stacked View）
-- **横向事件条**：直观显示事件的连续性和分布
-- **多事件类型展示**：同时显示打卡、番茄钟、待办事项
-- **点击进入详情**：点击日期自动切换到紧凑视图的详情页
-- **图例说明**：顶部显示颜色图例
+**月份高度**: 403px
 
-#### 1.3 详细信息视图（占位）
-- 预留了视图接口和菜单入口
-- 待后续开发实现
+#### 1.2 叠放视图 (Stacked View)
+**特点**：
+- 月历网格显示，每个日期显示三行横条（对应三种事件类型）
+- 横条颜色：绿色（打卡）、橙色（番茄钟）、蓝色（待办）
+- 多日连续事件通过横条连接显示
+- 点击有事件的日期可查看详情
 
-#### 1.4 列表视图（占位）
-- 预留了视图接口和菜单入口
-- 待后续开发实现
-
-### 2. 视图切换系统
-
-- **下拉菜单**：右上角图标点击展开视图选择菜单
-- **状态保持**：从叠放视图进入详情后，返回时回到叠放视图
-- **平滑过渡**：使用 `AnimatedSwitcher` 实现视图切换动画
-
-### 3. 测试数据系统
-
-为便于开发和演示，实现了完整的测试数据生成：
-
-```dart
-// 生成前后15天的测试数据
-- 打卡记录：随机分布
-- 番茄钟记录：每天1-3个随机时段
-- 待办事项：每天0-2个随机任务
+**视觉效果**：
+```
+每个日期格子：
+┌─────┐
+│  5  │ ← 日期数字
+├─────┤
+│ ▬▬▬ │ ← 打卡事件（绿色）
+│ ▬▬▬ │ ← 番茄钟事件（橙色）
+│ ▬▬▬ │ ← 待办事件（蓝色）
+└─────┘
 ```
 
-**事件颜色配置**：
-- 打卡：绿色 (`Colors.green`)
-- 番茄钟：橙色 (`Colors.orange`)
-- 待办：蓝色 (`Colors.blue`)
+**月份高度**: 466px
+
+#### 1.3 详细信息视图 (Detailed View)
+**特点**：
+- 月历网格显示，每个日期直接显示事件列表
+- 每天固定高度，最多显示 3 个事件
+- 超过 3 个事件时显示前 2 个 + "+n" 提示
+- 事件标题超长时用省略号截断
+- 点击日期查看 24 小时详情
+
+**显示规则**：
+- 1-3 个事件：全部显示
+- 4+ 个事件：显示前 2 个 + "+n"（n = 总数 - 2）
+
+**日期单元格高度**: 80px  
+**月份高度**: 540px
+
+#### 1.4 列表视图 (List View)
+**特点**：
+- 上下分屏设计
+- 上半部分：可滚动的月历（带事件小圆圈标记）
+- 下半部分：选中日期的详细事件列表
+- 默认选中当天
+
+**上半部分**：
+- 紧凑的月历布局
+- 与紧凑视图相同的事件标记方式
+- 支持滑动查看不同月份
+
+**下半部分**：
+- 事件卡片设计，包含：
+  - 左侧彩色指示条
+  - 事件图标
+  - 事件标题
+  - 时间和时长
+  - 已完成的待办显示删除线
+- 按时间顺序排列
+- 无事件时显示提示文字
+
+**月份高度**: 268px
 
 ---
 
-## ⚡ 优化改进
+## 🎨 UI/UX 优化
 
-### 1. 滚动体验优化
+### 1. 视图切换系统
+- 右上角下拉菜单快速切换视图
+- 切换时自动重置滚动位置
+- 平滑过渡到当前月份
+- 视图模式图标清晰易懂
 
-#### 问题 1：滚动范围受限
-**现象**：只能上滑到8月，下滑到2月  
-**原因**：月份列表生成范围过小（-3 到 +3）  
-**解决**：扩展到 -12 到 +12，共25个月
+### 2. 滚动位置管理
+**问题**：
+- 初始显示不是当前月份
+- 切换视图后位置错乱
+- 年份显示不更新
 
-#### 问题 2：初始显示位置错误
-**现象**：首次打开显示去年11月  
-**原因**：滚动位置未初始化到当前月  
-**解决**：
-- 实现 `_scrollToCurrentMonth()` 方法
-- 在 `didChangeDependencies()` 中自动滚动
-- 使用 `addPostFrameCallback` 确保布局完成后滚动
+**解决方案**：
+- 实现了精确的月份高度计算（不同视图不同高度）
+- 滚动监听器动态更新顶部年份显示
+- 视图切换时强制滚动到当前月份
+- 使用 `addPostFrameCallback` 确保布局完成后再滚动
 
+**高度配置**：
 ```dart
-void _scrollToCurrentMonth() {
-  if (!mounted || _hasScrolledToCurrentMonth) return;
-  _scrollToMonth(_selectedMonth);
-  _hasScrolledToCurrentMonth = true;
+紧凑视图：403px
+叠放视图：466px
+详细视图：540px
+列表视图：268px
+```
+
+### 3. 导航返回逻辑
+**问题**：
+- 从叠放/详细视图点击日期后，返回时跳到紧凑视图
+
+**解决方案**：
+- 引入 `_previousViewMode` 状态变量
+- 点击日期时保存当前视图模式
+- 返回时恢复到原视图模式
+- 删除了多余的 `onViewModeChange` 回调
+
+### 4. 事件颜色标准化
+- 打卡：绿色 (Colors.green)
+- 番茄钟：橙色 (Colors.orange)
+- 待办：蓝色 (Colors.blue)
+- 全部视图统一配色
+
+---
+
+## 🏗️ 架构优化
+
+### 1. 代码模块化重构
+
+**重构前**：
+- 单一文件 `calendar_view.dart` 包含所有视图逻辑（1000+ 行）
+
+**重构后**：
+```
+lib/views/calendar/
+├── calendar_view.dart           # 主视图（数据加载、状态管理、视图调度）
+├── calendar_types.dart          # 类型定义和工具函数
+├── calendar_compact_view.dart   # 紧凑视图
+├── calendar_stacked_view.dart   # 叠放视图
+├── calendar_detailed_view.dart  # 详细信息视图
+├── calendar_list_view.dart      # 列表视图
+└── calendar_placeholder_view.dart # 占位符组件
+```
+
+**优势**：
+- 单一职责原则
+- 代码可读性提升
+- 易于维护和扩展
+- 组件复用性强
+
+### 2. 类型系统设计
+
+**枚举类型**：
+```dart
+enum CalendarViewMode {
+  compact,   // 紧凑
+  stacked,   // 叠放
+  detailed,  // 详细
+  list,      // 列表
+}
+
+enum CalendarDisplayState {
+  collapsed, // 折叠
+  expanded,  // 展开
+}
+
+enum EventType {
+  checkIn,   // 打卡
+  pomodoro,  // 番茄钟
+  todo,      // 待办
 }
 ```
 
-#### 问题 3：视图切换后无法定位
-**现象**：从叠放切换到紧凑时，位置偏移  
-**原因**：不同视图的月份高度不同  
-**解决**：
-- 紧凑视图：约400px/月
-- 叠放视图：约460px/月
-- 根据视图模式动态计算滚动偏移
+**数据模型**：
+```dart
+class TodoTestData {
+  final String title;
+  final DateTime startTime;
+  final int durationMinutes;
+  final bool completed;
+}
+```
 
-### 2. 年份显示动态更新
+**工具函数**：
+```dart
+class CalendarUtils {
+  static String formatDateKey(DateTime date);
+  static String formatDateString(DateTime date);
+  static String formatTime(DateTime date);
+  static bool isToday(DateTime date);
+  static bool isSameDay(DateTime date1, DateTime date2);
+  // ... 更多工具方法
+}
+```
 
-#### 问题：年份不随滚动更新
-**现象**：滚动到去年或明年，顶部仍显示2025年  
-**解决方案**：
-- 分离状态变量：
-  - `_selectedMonth`：固定为当前月，用于生成列表
-  - `_displayedMonth`：动态更新，用于顶部显示
-- 添加滚动监听器，实时计算显示月份
+---
 
+## 🐛 问题修复
+
+### 1. 滚动范围限制
+**问题**：只能滚动到 8 月和 2 月  
+**修复**：生成 25 个月（前 12 个月 + 当前月 + 后 12 个月）
+
+### 2. 初始显示月份错误
+**问题**：打开日历显示去年 11 月  
+**修复**：在 `didChangeDependencies` 中使用 `addPostFrameCallback` 滚动到当前月
+
+### 3. 视图切换后位置错误
+**问题**：切换视图后不显示当前月份  
+**修复**：
+- 重置滚动位置到顶部
+- 使用双重 `postFrameCallback` 确保布局完成
+- 为每个视图设置正确的 `estimatedMonthHeight`
+
+### 4. 年份显示不更新
+**问题**：滚动到不同年份时左上角年份不变  
+**修复**：
+- 分离 `_selectedMonth`（固定）和 `_displayedMonth`（动态）
+- 添加滚动监听器动态更新 `_displayedMonth`
+- 避免因更新 `_selectedMonth` 导致 ListView 重建
+
+### 5. 测试数据缺失
+**问题**：只有待办数据，打卡和番茄钟数据消失  
+**修复**：修正 `_loadTestData` 方法的数据添加逻辑
+
+### 6. 数据库加载错误 (Windows)
+**问题**：Windows 平台数据库初始化失败  
+**修复**：
+- 在 `main.dart` 中添加 `sqflite_common_ffi` 初始化
+- 在 `database_service.dart` 中使用 `databaseFactory` API
+
+### 7. 详细视图布局溢出
+**问题**：事件过多导致日期单元格溢出显示乱码  
+**修复**：
+- 设置固定日期单元格高度（80px）
+- 实现 `_buildLimitedEventItems` 控制显示数量
+- 使用 `ClipRect` 防止溢出
+- 减小字体大小和间距
+
+### 8. 列表视图编译错误
+**问题**：`PomodoroRecord` 字段名不匹配  
+**修复**：
+- `record.date` → `record.startedAt`
+- `record.duration` → `record.durationMinutes`
+- `record.taskName` → 固定文本 '专注时间'
+
+---
+
+## 📊 测试数据系统
+
+### 测试数据生成
+为了方便调试和演示，实现了完整的测试数据生成系统：
+
+**打卡测试数据**：
+- 生成过去 30 天的随机打卡记录
+- 部分日期有多次打卡
+
+**番茄钟测试数据**：
+- 生成过去 30 天的随机番茄钟记录
+- 包含不同时长（25/45/60 分钟）
+- 统计每天的番茄钟数量
+
+**待办测试数据**：
+- 生成未来和过去的待办事项
+- 包含时间、标题、时长、完成状态
+- 统计每天的待办数量
+
+**切换方式**：
+```dart
+bool _showTestData = true;  // true: 测试数据, false: 真实数据
+```
+
+---
+
+## 🔧 技术细节
+
+### 修改的文件
+
+#### 新增文件
+1. `lib/views/calendar/calendar_types.dart` - 类型定义
+2. `lib/views/calendar/calendar_compact_view.dart` - 紧凑视图
+3. `lib/views/calendar/calendar_stacked_view.dart` - 叠放视图
+4. `lib/views/calendar/calendar_detailed_view.dart` - 详细信息视图
+5. `lib/views/calendar/calendar_list_view.dart` - 列表视图
+6. `lib/views/calendar/calendar_placeholder_view.dart` - 占位符
+
+#### 修改文件
+1. `lib/views/calendar/calendar_view.dart` - 主视图重构
+2. `lib/main.dart` - 添加桌面平台数据库支持
+3. `lib/core/database/database_service.dart` - 跨平台数据库初始化
+
+#### 文档更新
+1. `docs/UPDATE_2025-11-09_CALENDAR.md` - 本文档
+2. `docs/CHANGELOG.md` - 待更新
+3. `docs/MILESTONE.md` - 待更新
+
+### 关键技术实现
+
+#### 1. 滚动位置计算
+```dart
+void _scrollToMonth(DateTime targetMonth) {
+  final currentMonth = DateTime.now();
+  final monthDiff = (targetMonth.year - currentMonth.year) * 12 + 
+                   (targetMonth.month - currentMonth.month);
+  final targetIndex = 12 + monthDiff; // 0-24 索引
+  
+  double estimatedMonthHeight = switch (_viewMode) {
+    CalendarViewMode.compact => 403.0,
+    CalendarViewMode.stacked => 466.0,
+    CalendarViewMode.detailed => 540.0,
+    CalendarViewMode.list => 268.0,
+  };
+  
+  final targetOffset = targetIndex * estimatedMonthHeight;
+  _scrollController.jumpTo(targetOffset);
+}
+```
+
+#### 2. 动态年份更新
 ```dart
 void _onScroll() {
+  if (!mounted || !_scrollController.hasClients) return;
+  if (_displayState == CalendarDisplayState.expanded) return;
+  
   final offset = _scrollController.offset;
-  final monthHeight = _viewMode == CalendarViewMode.stacked ? 460.0 : 400.0;
+  final monthHeight = getMonthHeightForCurrentView();
   final currentIndex = (offset / monthHeight + 0.3).floor();
   
-  final newMonth = DateTime(currentMonth.year, currentMonth.month + currentIndex - 12, 1);
+  final currentMonth = DateTime.now();
+  final newMonth = DateTime(
+    currentMonth.year, 
+    currentMonth.month + currentIndex - 12, 
+    1
+  );
   
   if (newMonth != _displayedMonth) {
     setState(() => _displayedMonth = newMonth);
@@ -118,310 +349,215 @@ void _onScroll() {
 }
 ```
 
-#### 问题：滚动卡顿
-**现象**：滚动时月份突然跳转，不连贯  
-**原因**：更新 `_selectedMonth` 导致 ListView 重建  
-**解决**：仅更新 `_displayedMonth`，不触发列表重建
-
-### 3. 视图状态保持
-
-#### 问题：返回视图错误
-**现象**：从叠放视图查看详情后，返回到紧凑视图  
-**解决**：
-- 引入 `_previousViewMode` 记录原视图
-- 进入详情前保存当前视图
-- 返回时恢复原视图
-
+#### 3. 视图状态管理
 ```dart
-onDateSelected: (date) {
-  setState(() {
-    _previousViewMode = _viewMode; // 保存
-    _viewMode = CalendarViewMode.compact;
-  });
-}
+// 分离显示月份和生成月份
+final DateTime _selectedMonth = DateTime.now();  // 固定，用于生成月份列表
+DateTime _displayedMonth = DateTime.now();        // 动态，用于顶部显示
 
-// 返回按钮
-onPressed: () {
-  setState(() {
-    _viewMode = _previousViewMode; // 恢复
-  });
-}
+// 视图模式状态
+CalendarViewMode _viewMode = CalendarViewMode.compact;
+CalendarViewMode? _previousViewMode;  // 记录跳转前的视图
+
+// 展开/折叠状态
+CalendarDisplayState _displayState = CalendarDisplayState.collapsed;
+DateTime? _selectedDate;  // 选中的日期
 ```
 
 ---
 
-## 🏗️ 代码重构
+## 🎯 性能优化
 
-### 文件结构优化
+### 1. 按需渲染
+- 使用 `ListView.builder` 实现虚拟滚动
+- 只渲染可见区域的月份
+- 减少不必要的 Widget 重建
 
-#### 重构前
-```
-lib/views/calendar/
-  └── calendar_view.dart (800+ 行)
-```
+### 2. 状态管理优化
+- 避免在滚动监听器中频繁更新状态
+- 使用 `floor` + 偏移量减少切换抖动
+- 分离显示状态和数据状态
 
-#### 重构后
-```
-lib/views/calendar/
-  ├── calendar_view.dart           (主视图，数据管理)
-  ├── calendar_types.dart          (类型定义)
-  ├── calendar_compact_view.dart   (紧凑视图)
-  ├── calendar_stacked_view.dart   (叠放视图)
-  └── calendar_placeholder_view.dart (占位视图)
-```
-
-### 各文件职责
-
-#### `calendar_types.dart` - 公共类型
-```dart
-- CalendarViewMode: 视图模式枚举
-- CalendarDisplayState: 显示状态枚举
-- EventType: 事件类型枚举
-- TodoTestData: 待办测试数据模型
-- CalendarUtils: 日期工具类
-```
-
-#### `calendar_view.dart` - 主视图
-- 数据加载和管理
-- 视图模式切换
-- 滚动控制
-- 顶部导航栏
-
-#### `calendar_compact_view.dart` - 紧凑视图
-- 月份网格显示
-- 日期详情展开
-- 24小时时间轴
-- 事件卡片渲染
-
-#### `calendar_stacked_view.dart` - 叠放视图
-- 横向事件条
-- 多事件类型展示
-- 图例显示
-
-#### `calendar_placeholder_view.dart` - 占位视图
-- 通用占位组件
-- 用于未实现的视图
+### 3. 布局优化
+- 使用 `ClipRect` 防止溢出导致重布局
+- 固定高度避免动态计算
+- 减少嵌套层级
 
 ---
 
-## 🐛 问题修复
+## 📈 开发进度
 
-### 1. 测试数据问题
-**问题**：只显示待办数据，打卡和番茄钟不显示  
-**原因**：`_loadTestData()` 逻辑错误，未正确填充列表  
-**修复**：确保所有测试数据正确添加到对应列表
-
-### 2. 数据类型错误
-**问题**：数据库加载出错  
-**原因**：`id` 字段类型错误（String vs int?）  
-**修复**：测试数据不设置 id，保持为 null
-
-### 3. 桌面平台数据库错误
-**问题**：Windows 平台无法加载数据库  
-**原因**：未初始化 `sqflite_common_ffi`  
-**修复**：
-
-#### `main.dart`
-```dart
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  if (Platform.isWindows || Platform.isLinux) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
-  
-  await NotificationService.instance.initialize();
-  runApp(const MyApp());
-}
-```
-
-#### `database_service.dart`
-```dart
-Future<Database> _initDB(String filePath) async {
-  String path;
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    final dbPath = await databaseFactory.getDatabasesPath();
-    path = join(dbPath, filePath);
-  } else {
-    final dbPath = await getDatabasesPath();
-    path = join(dbPath, filePath);
-  }
-  
-  return await databaseFactory.openDatabase(
-    path,
-    options: OpenDatabaseOptions(version: 2, onCreate: _createDB, onUpgrade: _upgradeDB),
-  );
-}
-```
-
-### 4. 叠放视图月份高度调优
-**问题**：切换到叠放视图时，当前月份位置偏移  
-**过程**：
-- 初始 500px → 偏上
-- 调整 550px → 太大，显示下一月
-- 调整 480px → 接近
-- 最终 460px → 准确
-
----
-
-## 🔧 技术细节
-
-### 关键算法
-
-#### 1. 滚动位置计算
-```dart
-// 月份索引：0-24，其中 12 是当前月
-final targetIndex = 12 + monthDiff;
-
-// 根据视图计算偏移量
-final monthHeight = _viewMode == CalendarViewMode.stacked ? 460.0 : 400.0;
-final targetOffset = targetIndex * monthHeight;
-
-// 执行滚动
-_scrollController.jumpTo(targetOffset);
-```
-
-#### 2. 当前显示月份计算
-```dart
-final offset = _scrollController.offset;
-final monthHeight = _viewMode == CalendarViewMode.stacked ? 460.0 : 400.0;
-
-// +0.3 避免过于敏感
-final currentIndex = (offset / monthHeight + 0.3).floor();
-
-// 计算实际月份
-final currentMonth = DateTime.now();
-final displayedMonth = DateTime(
-  currentMonth.year,
-  currentMonth.month + currentIndex - 12,
-  1,
-);
-```
-
-#### 3. 事件数据分组
-```dart
-// 按日期键分组
-final dateKey = CalendarUtils.formatDateKey(date); // "2025-11-09"
-
-// 番茄钟计数
-pomodoroCountByDate[dateKey] = (pomodoroCountByDate[dateKey] ?? 0) + 1;
-
-// 待办计数
-todoCountByDate[dateKey] = testTodos
-    .where((todo) => CalendarUtils.formatDateKey(todo.startTime) == dateKey)
-    .length;
-```
-
-### 性能优化
-
-1. **避免不必要的重建**
-   - 分离 `_selectedMonth` 和 `_displayedMonth`
-   - 仅更新显示状态，不重建列表
-
-2. **滚动监听节流**
-   - 仅在月份真正改变时更新状态
-   - 使用 `floor` + 偏移量避免频繁触发
-
-3. **布局优化**
-   - 使用 `ListView.builder` 按需构建
-   - 避免一次性加载所有月份
-
----
-
-## 📊 开发进度
-
-### 日历功能完成度: 70%
+### Calendar 模块完成度: 95%
 
 **已完成**：
-- ✅ 紧凑视图基础功能
-- ✅ 叠放视图基础功能
+- ✅ 紧凑视图（带日详情展开）
+- ✅ 叠放视图（事件横条显示）
+- ✅ 详细信息视图（日内事件列表）
+- ✅ 列表视图（分屏显示）
 - ✅ 视图切换系统
-- ✅ 滚动交互优化
+- ✅ 滚动位置管理
+- ✅ 动态年份显示
 - ✅ 测试数据系统
-- ✅ 代码重构
+- ✅ 跨平台数据库支持
+- ✅ 代码重构和模块化
 
-**进行中**：
-- 🔄 详细信息视图
-- 🔄 列表视图
+**待优化**：
+- [ ] 列表视图高度微调（当前 268px）
+- [ ] 添加日历事件过滤功能
+- [ ] 添加月份快速跳转功能
+- [ ] 优化大量事件时的性能
 
-**待完成**：
-- ⏳ 事件编辑功能
-- ⏳ 事件搜索功能
-- ⏳ 日历设置选项
-- ⏳ 性能优化
-- ⏳ 单元测试
+**待测试**：
+- [ ] 不同屏幕尺寸适配
+- [ ] 横屏模式显示
+- [ ] 极端数据量场景（如一天 100+ 事件）
 
 ---
 
-## 🎯 下一步计划
+## 🎨 设计亮点
 
-### 短期目标（本周）
-1. 实现详细信息视图
-2. 实现列表视图
-3. 添加事件点击跳转功能
-4. 优化事件颜色主题
+### 1. Apple Calendar 灵感
+参考了 iOS/macOS 原生日历的设计理念：
+- 多视图切换
+- 事件颜色编码
+- 简洁的信息层级
+- 流畅的交互动画
 
-### 中期目标（本月）
+### 2. 信息密度平衡
+不同视图提供不同信息密度：
+- **紧凑**：最少信息，快速浏览
+- **叠放**：中等信息，关注事件分布
+- **详细**：较多信息，直接查看事件
+- **列表**：最多信息，深度查看选中日期
+
+### 3. 一致的视觉语言
+- 统一的事件颜色系统
+- 一致的字体和间距
+- 相同的交互模式
+- 清晰的视觉层次
+
+---
+
+## 🐛 已知问题
+
+### 1. 高度精度
+各视图的月份高度经过多次调试，但仍可能需要微调：
+- 紧凑视图：403px（基本准确）
+- 叠放视图：466px（基本准确）
+- 详细视图：540px（准确）
+- 列表视图：268px（可能需要 ±5px 调整）
+
+### 2. 农历显示
+当前已预留农历显示接口，但实际功能未实现。
+
+### 3. 真实数据加载
+切换 `_showTestData = false` 后需要：
+- 确保数据库有真实数据
+- 处理空数据状态
+- 优化数据加载性能
+
+---
+
+## 💡 使用说明
+
+### 切换视图
+1. 点击右上角视图切换按钮（三横线图标）
+2. 选择想要的视图模式：紧凑/叠放/详细/列表
+
+### 查看日期详情
+- **紧凑视图**：点击日期进入 24 小时详情
+- **叠放视图**：点击有事件的日期进入详情
+- **详细视图**：点击日期进入 24 小时详情
+- **列表视图**：点击日期，下半部分显示事件列表
+
+### 滚动浏览
+- 上下滑动查看不同月份
+- 左上角显示当前年份
+- 支持前后各 12 个月浏览（总共 25 个月）
+
+### 返回操作
+- 点击左上角返回按钮
+- 自动返回到之前的视图模式
+
+---
+
+## 🔮 未来规划
+
+### 短期计划
+1. 完成高度微调测试
+2. 添加事件筛选功能
+3. 实现月份快速跳转
+4. 添加周视图
+
+### 中期计划
 1. 实现事件编辑功能
-2. 实现事件搜索功能
-3. 添加日历设置选项
-4. 完善测试覆盖
+2. 添加重复事件支持
+3. 集成系统日历
+4. 添加事件提醒
 
-### 长期目标（下月）
-1. 系统日历集成
-2. 日历导出功能
-3. 性能全面优化
-4. 发布 v1.0
+### 长期计划
+1. 多日历支持
+2. 日历分享功能
+3. 智能事件建议
+4. AI 时间管理助手
 
 ---
 
 ## 📸 效果预览
 
 ### 紧凑视图
-- 月份网格显示，每个日期下方显示事件圆点
-- 点击日期展开24小时详情
-- 支持前后12个月滚动
+- 月历网格 + 小圆圈事件标记
+- 点击展开 24 小时详情
+- 适合快速浏览
 
 ### 叠放视图
-- 月份网格 + 横向事件条
-- 三种事件类型同时显示
-- 顶部图例说明
+- 三行彩色横条显示事件
+- 视觉化事件分布
+- 适合查看忙碌程度
 
-### 视图切换
-- 右上角下拉菜单
-- 平滑过渡动画
-- 保持滚动位置
+### 详细信息视图
+- 日期单元格内直接显示事件
+- 最多显示 3 个事件（2 + +n）
+- 适合查看事件标题
 
----
-
-## 🔍 技术亮点
-
-1. **状态管理优化**
-   - 分离显示状态和数据状态
-   - 避免不必要的重建
-
-2. **跨平台兼容**
-   - Windows/Linux/macOS 数据库支持
-   - 使用 `sqflite_common_ffi`
-
-3. **代码质量**
-   - 职责清晰的模块化设计
-   - 详细的代码注释
-   - 无 Linter 错误
-
-4. **用户体验**
-   - 平滑的滚动体验
-   - 直观的视图切换
-   - 准确的状态保持
+### 列表视图
+- 上半部分：月历导航
+- 下半部分：事件详细列表
+- 适合深度查看单日事件
 
 ---
 
-## 🙏 总结
+## 🙏 致谢
 
-本次更新完成了日历功能的核心开发，实现了多视图系统、交互优化、代码重构等重要工作。通过解决滚动、显示、性能等多个关键问题，为用户提供了流畅、直观的日历使用体验。
+感谢苹果日历提供的设计灵感！  
+感谢 Flutter 社区提供的强大框架！
+
+---
+
+## 📝 调试记录
+
+### 高度调试历史
+
+#### 详细视图
+- 初始：650px → 520px → 450px → 420px
+- 第二轮：440px → 465px → 490px → 500px
+- 最终：510px → 530px → **540px** ✅
+
+#### 叠放视图
+- 初始：460px → 470px → **465px** → **466px** ✅
+
+#### 紧凑视图
+- 初始：400px → 405px → **403px** ✅
+
+#### 列表视图
+- 初始：280px → 275px → **268px** ✅
+
+每次调整都基于用户反馈（"偏上"/"偏下"/"显示10月"等）进行精确微调。
+
+---
 
 **更新日期**: 2025-11-09  
 **版本**: v1.0.0 (开发中)  
-**开发者**: AI Assistant & User
+**分支**: feature/calender_update  
+**提交**: 新增了详细、列表两种日历形式
 
