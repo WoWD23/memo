@@ -4,6 +4,10 @@ import '../../repositories/pomodoro_repository.dart';
 import '../../models/check_in.dart';
 import '../../models/pomodoro_record.dart';
 import '../../core/theme/app_colors.dart';
+import 'calendar_types.dart';
+import 'calendar_compact_view.dart';
+import 'calendar_stacked_view.dart';
+import 'calendar_placeholder_view.dart';
 
 /// 日历视图
 class CalendarView extends StatefulWidget {
@@ -17,50 +21,168 @@ class _CalendarViewState extends State<CalendarView> {
   final CheckInRepository _checkInRepository = CheckInRepository();
   final PomodoroRepository _pomodoroRepository = PomodoroRepository();
 
-  DateTime _selectedMonth = DateTime.now();
+  // 视图模式
+  CalendarViewMode _viewMode = CalendarViewMode.compact;
+  CalendarViewMode _previousViewMode = CalendarViewMode.compact; // 记录之前的视图模式
+  CalendarDisplayState _displayState = CalendarDisplayState.collapsed;
+  
+  // 数据
+  final DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1); // 固定为当前月，用于ListView生成
+  DateTime _displayedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1); // 用于顶部显示的月份（根据滚动位置动态更新）
+  DateTime? _selectedDate;
   List<CheckIn> _checkIns = [];
+  List<PomodoroRecord> _pomodoroRecords = [];
   Map<String, int> _pomodoroCountByDate = {};
+  Map<String, int> _todoCountByDate = {};
+  List<TodoTestData> _testTodos = [];
   bool _isLoading = false;
+
+  // 滚动控制器
+  final ScrollController _scrollController = ScrollController();
+  bool _hasScrolledToCurrentMonth = false;
+  
+  // 开发模式：显示测试数据
+  bool _showTestData = true;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // 添加滚动监听器，根据滚动位置更新显示的年份
+    _scrollController.addListener(_onScroll);
+    if (_showTestData) {
+      _loadTestData();
+    } else {
+      _loadData();
+    }
+  }
+  
+  /// 滚动监听器：根据滚动位置更新当前显示的月份（仅更新顶部年份显示）
+  void _onScroll() {
+    if (!mounted || !_scrollController.hasClients) return;
+    if (_displayState == CalendarDisplayState.expanded) return; // 展开详情时不更新
+    
+    final offset = _scrollController.offset;
+    
+    // 根据视图模式使用不同的月份高度
+    final monthHeight = _viewMode == CalendarViewMode.stacked ? 460.0 : 400.0;
+    
+    // 计算当前滚动到第几个月（索引0-24，其中12是当前月）
+    // 使用 floor 而不是 round，避免过于敏感
+    final currentIndex = (offset / monthHeight + 0.3).floor(); // 加0.3确保滚动超过30%才切换
+    
+    // 根据索引计算月份
+    final currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+    final newMonth = DateTime(currentMonth.year, currentMonth.month + currentIndex - 12, 1);
+    
+    // 只更新 _displayedMonth 用于顶部显示，不影响 ListView 的内容
+    if (newMonth.year != _displayedMonth.year || newMonth.month != _displayedMonth.month) {
+      setState(() {
+        _displayedMonth = newMonth;
+      });
+    }
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasScrolledToCurrentMonth && _displayState == CalendarDisplayState.collapsed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentMonth();
+      });
+    }
+  }
+  
+  /// 滚动到当前月份
+  void _scrollToCurrentMonth({bool force = false}) {
+    if (!mounted) return;
+    if (!force && _hasScrolledToCurrentMonth) return;
+    debugPrint('📍 滚动到当前月份: $_selectedMonth, 视图模式: $_viewMode, 强制: $force');
+    _scrollToMonth(_selectedMonth);
+    if (!force) _hasScrolledToCurrentMonth = true;
+  }
+  
+  /// 滚动到指定月份
+  void _scrollToMonth(DateTime targetMonth) {
+    if (!mounted || !_scrollController.hasClients) return;
+    
+    final currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+    final monthDiff = (targetMonth.year - currentMonth.year) * 12 + 
+                     (targetMonth.month - currentMonth.month);
+    
+    final targetIndex = 12 + monthDiff;
+    
+    if (targetIndex < 0 || targetIndex > 24) return;
+    
+    // 叠放视图和紧凑视图使用不同的月份高度估算
+    // 注意：叠放视图的图例在 ListView 外部，不影响滚动计算
+    double estimatedMonthHeight;
+    if (_viewMode == CalendarViewMode.stacked) {
+      // 叠放视图每个月：月份标题(60) + 星期标题(28) + 日期网格(约350-380) ≈ 460px
+      estimatedMonthHeight = 460.0;
+    } else {
+      // 紧凑视图
+      estimatedMonthHeight = 400.0;
+    }
+    
+    final targetOffset = targetIndex * estimatedMonthHeight;
+    
+    debugPrint('📏 目标月份: $targetMonth, 索引: $targetIndex, 视图: $_viewMode, 估计高度: $estimatedMonthHeight, 目标偏移: $targetOffset');
+    
+    try {
+      if (_scrollController.position.hasContentDimensions) {
+        final clampedOffset = targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent);
+        debugPrint('🔄 实际滚动偏移: $clampedOffset (最大: ${_scrollController.position.maxScrollExtent})');
+        _scrollController.jumpTo(clampedOffset);
+      } else {
+        _scrollController.jumpTo(targetOffset);
+      }
+    } catch (e) {
+      debugPrint('Failed to scroll to month: $e');
+    }
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 加载数据
   Future<void> _loadData() async {
     if (!mounted) return;
     
     setState(() => _isLoading = true);
 
     try {
-      final startOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
-      final endOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
+      final startDate = DateTime(_selectedMonth.year, _selectedMonth.month - 12, 1);
+      final endDate = DateTime(_selectedMonth.year, _selectedMonth.month + 13, 0);
 
-      // 加载打卡记录（添加超时）
-      _checkIns = await _checkInRepository
-          .getByDateRange(startOfMonth, endOfMonth)
+      final checkIns = await _checkInRepository
+          .getByDateRange(startDate, endDate)
           .timeout(const Duration(seconds: 5));
 
-      // 加载番茄钟记录并统计每天的数量（添加超时）
       final pomodoroRecords = await _pomodoroRepository
-          .getByDateRange(startOfMonth, endOfMonth)
+          .getByDateRange(startDate, endDate)
           .timeout(const Duration(seconds: 5));
       
-      _pomodoroCountByDate = {};
+      final pomodoroCountByDate = <String, int>{};
       for (var record in pomodoroRecords) {
         if (record.completed && record.mode == 'work') {
-          final dateKey = _formatDateKey(record.startedAt);
-          _pomodoroCountByDate[dateKey] = (_pomodoroCountByDate[dateKey] ?? 0) + 1;
+          final dateKey = CalendarUtils.formatDateKey(record.startedAt);
+          pomodoroCountByDate[dateKey] = (pomodoroCountByDate[dateKey] ?? 0) + 1;
         }
       }
-    } catch (e) {
-      // 加载失败时，使用空数据
-      debugPrint('Failed to load calendar data: $e');
-      _checkIns = [];
-      _pomodoroCountByDate = {};
       
-      // 显示错误提示
+      if (mounted) {
+        setState(() {
+          _checkIns = checkIns;
+          _pomodoroRecords = pomodoroRecords;
+          _pomodoroCountByDate = pomodoroCountByDate;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load calendar data: $e');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -76,6 +198,111 @@ class _CalendarViewState extends State<CalendarView> {
     }
   }
 
+  /// 加载测试数据
+  void _loadTestData() {
+    final now = DateTime.now();
+    final testCheckIns = <CheckIn>[];
+    final testPomodoros = <PomodoroRecord>[];
+    final testTodos = <TodoTestData>[];
+    
+    final todoTemplates = [
+      ('健身', 60, 7),
+      ('会议', 90, 10),
+      ('学习', 120, 14),
+      ('购物', 30, 16),
+      ('阅读', 45, 20),
+    ];
+    
+    for (int i = 0; i < 30; i++) {
+      final date = now.subtract(Duration(days: i));
+      final dateKey = CalendarUtils.formatDateKey(date);
+      
+      if (i % 3 != 0) {
+        testCheckIns.add(CheckIn(
+          date: date,
+          createdAt: date,
+          note: i % 5 == 0 ? '测试打卡备注' : null,
+        ));
+      }
+      
+      if (i % 5 != 0) {
+        final pomodoroCount = (i % 3) + 1;
+        for (int j = 0; j < pomodoroCount; j++) {
+          final hour = 9 + j * 3;
+          final startTime = DateTime(date.year, date.month, date.day, hour, 0);
+          
+          testPomodoros.add(PomodoroRecord(
+            startedAt: startTime,
+            durationMinutes: j == 0 ? 25 : (j == 1 ? 60 : 90),
+            mode: 'work',
+            completed: true,
+          ));
+        }
+      }
+      
+      if (i % 2 == 0) {
+        final todoNum = (i % 2) + 1;
+        for (int j = 0; j < todoNum; j++) {
+          final template = todoTemplates[(i + j) % todoTemplates.length];
+          final startTime = DateTime(date.year, date.month, date.day, template.$3, 0);
+          
+          testTodos.add(TodoTestData(
+            title: template.$1,
+            startTime: startTime,
+            durationMinutes: template.$2,
+            completed: i > 0,
+          ));
+        }
+        _todoCountByDate[dateKey] = todoNum;
+      }
+    }
+    
+    for (int i = 1; i <= 10; i++) {
+      final date = now.add(Duration(days: i));
+      final dateKey = CalendarUtils.formatDateKey(date);
+      
+      if (i % 2 == 0) {
+        testCheckIns.add(CheckIn(
+          date: date,
+          createdAt: now,
+          note: '未来计划',
+        ));
+      }
+      
+      if (i % 3 != 0) {
+        final todoNum = (i % 2) + 1;
+        for (int j = 0; j < todoNum; j++) {
+          final template = todoTemplates[(i + j) % todoTemplates.length];
+          final startTime = DateTime(date.year, date.month, date.day, template.$3, 0);
+          
+          testTodos.add(TodoTestData(
+            title: template.$1,
+            startTime: startTime,
+            durationMinutes: template.$2,
+            completed: false,
+          ));
+        }
+        _todoCountByDate[dateKey] = todoNum;
+      }
+    }
+    
+    setState(() {
+      _checkIns = [..._checkIns, ...testCheckIns];
+      _pomodoroRecords = [..._pomodoroRecords, ...testPomodoros];
+      _testTodos = testTodos;
+      
+      _pomodoroCountByDate = {};
+      for (var record in _pomodoroRecords) {
+        if (record.completed && record.mode == 'work') {
+          final dateKey = CalendarUtils.formatDateKey(record.startedAt);
+          _pomodoroCountByDate[dateKey] = (_pomodoroCountByDate[dateKey] ?? 0) + 1;
+        }
+      }
+    });
+    
+    debugPrint('📅 已加载测试数据: ${testCheckIns.length} 个打卡, ${testPomodoros.length} 个番茄钟, ${testTodos.length} 个待办');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -83,340 +310,232 @@ class _CalendarViewState extends State<CalendarView> {
       body: SafeArea(
         child: Column(
           children: [
-            // 月份选择器
-            _buildMonthSelector(),
-            
-            // 星期标题
-            _buildWeekdayHeader(),
-            
-            // 日历网格
+            _buildTopBar(),
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : _buildCalendarGrid(),
+                  : _buildContent(),
             ),
-            
-            // 图例
-            _buildLegend(),
           ],
         ),
       ),
     );
   }
 
-  /// 月份选择器
-  Widget _buildMonthSelector() {
+  /// 顶部导航栏
+  Widget _buildTopBar() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: Colors.white,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: () {
-              setState(() {
-                _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
-              });
-              _loadData();
-            },
-          ),
-          Text(
-            '${_selectedMonth.year}年${_selectedMonth.month}月',
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: () {
-              setState(() {
-                _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1);
-              });
-              _loadData();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 星期标题
-  Widget _buildWeekdayHeader() {
-    const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: weekdays.map((day) {
-          return Expanded(
-            child: Center(
-              child: Text(
-                day,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  /// 日历网格
-  Widget _buildCalendarGrid() {
-    final daysInMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0).day;
-    final firstDayOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
-    final weekdayOfFirstDay = firstDayOfMonth.weekday; // 1=Monday, 7=Sunday
-
-    // 计算需要多少周
-    final totalDays = daysInMonth + weekdayOfFirstDay - 1;
-    final weeks = (totalDays / 7).ceil();
-
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 7,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-      ),
-      itemCount: weeks * 7,
-      itemBuilder: (context, index) {
-        final dayNumber = index - weekdayOfFirstDay + 2;
-        
-        if (dayNumber < 1 || dayNumber > daysInMonth) {
-          return const SizedBox.shrink();
-        }
-
-        final date = DateTime(_selectedMonth.year, _selectedMonth.month, dayNumber);
-        final dateKey = _formatDateKey(date);
-        final hasCheckIn = _checkIns.any((c) => _formatDateKey(c.date) == dateKey);
-        final pomodoroCount = _pomodoroCountByDate[dateKey] ?? 0;
-        final isToday = _isToday(date);
-
-        return _buildDayCell(
-          day: dayNumber,
-          isToday: isToday,
-          hasCheckIn: hasCheckIn,
-          pomodoroCount: pomodoroCount,
-          date: date,
-        );
-      },
-    );
-  }
-
-  /// 日期单元格
-  Widget _buildDayCell({
-    required int day,
-    required bool isToday,
-    required bool hasCheckIn,
-    required int pomodoroCount,
-    required DateTime date,
-  }) {
-    return GestureDetector(
-      onTap: () => _showDayDetail(date, hasCheckIn, pomodoroCount),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: isToday
-              ? Border.all(color: AppColors.primary, width: 2)
-              : null,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '$day',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                color: isToday ? AppColors.primary : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (hasCheckIn)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.symmetric(horizontal: 1),
-                    decoration: const BoxDecoration(
-                      color: AppColors.checkIn,
-                      shape: BoxShape.circle,
+          if (_displayState == CalendarDisplayState.expanded)
+            IconButton(
+              icon: const Icon(Icons.chevron_left),
+              onPressed: () {
+                final scrollToMonth = _selectedDate != null 
+                    ? DateTime(_selectedDate!.year, _selectedDate!.month, 1)
+                    : _displayedMonth;
+                    
+                setState(() {
+                  _displayState = CalendarDisplayState.collapsed;
+                  // 恢复之前的视图模式
+                  _viewMode = _previousViewMode;
+                  _displayedMonth = scrollToMonth;
+                  _selectedDate = null;
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _scrollToMonth(scrollToMonth);
+                });
+              },
+            )
+          else
+            GestureDetector(
+              onTap: () {},
+              child: Row(
+                children: [
+                  const Icon(Icons.chevron_left, size: 20),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${_displayedMonth.year}年',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                if (pomodoroCount > 0)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.symmetric(horizontal: 1),
-                    decoration: const BoxDecoration(
-                      color: AppColors.pomodoro,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 图例
-  Widget _buildLegend() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildLegendItem(
-            color: AppColors.checkIn,
-            label: '已打卡',
-          ),
-          const SizedBox(width: 24),
-          _buildLegendItem(
-            color: AppColors.pomodoro,
-            label: '番茄钟',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendItem({
-    required Color color,
-    required String label,
-  }) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 显示日期详情
-  void _showDayDetail(DateTime date, bool hasCheckIn, int pomodoroCount) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _formatDateString(date),
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            _buildDetailRow(
-              icon: Icons.check_circle,
-              label: '打卡状态',
-              value: hasCheckIn ? '已打卡' : '未打卡',
-              color: hasCheckIn ? AppColors.checkIn : Colors.grey,
-            ),
-            const SizedBox(height: 16),
-            _buildDetailRow(
-              icon: Icons.timer,
-              label: '番茄钟',
-              value: '$pomodoroCount 个',
-              color: pomodoroCount > 0 ? AppColors.pomodoro : Colors.grey,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: color, size: 24),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+          
+          const Spacer(),
+          
+          PopupMenuButton<CalendarViewMode>(
+            icon: const Icon(Icons.view_headline),
+            offset: const Offset(0, 40),
+            itemBuilder: (context) => [
+              _buildViewModeMenuItem(CalendarViewMode.compact, '紧凑', Icons.view_compact),
+              _buildViewModeMenuItem(CalendarViewMode.stacked, '叠放', Icons.view_agenda),
+              _buildViewModeMenuItem(CalendarViewMode.detailed, '详细信息', Icons.view_module, enabled: false),
+              _buildViewModeMenuItem(CalendarViewMode.list, '列表', Icons.view_list, enabled: false),
             ],
+            onSelected: (mode) {
+              setState(() {
+                _viewMode = mode;
+                _displayState = CalendarDisplayState.collapsed;
+                _selectedDate = null;
+                // 切换视图后，重置滚动标记，以便重新定位到当前月份
+                _hasScrolledToCurrentMonth = false;
+                // 重置显示月份为当前月
+                _displayedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+              });
+              
+              // 切换视图后滚动到当前月份
+              // 使用 force: true 强制滚动，因为不同视图的月份高度不同
+              // 使用多个延迟来确保视图完全渲染
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                // 第一帧后等待布局完成
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _scrollToCurrentMonth(force: true);
+                  }
+                });
+              });
+            },
           ),
-        ),
-      ],
+          
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {},
+          ),
+          
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () {},
+          ),
+          
+          if (_showTestData)
+            Container(
+              margin: const EdgeInsets.only(left: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.orange, width: 1),
+              ),
+              child: const Text(
+                '测试',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  /// 格式化日期为key（YYYY-MM-DD）
-  String _formatDateKey(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  PopupMenuItem<CalendarViewMode> _buildViewModeMenuItem(
+    CalendarViewMode mode,
+    String label,
+    IconData icon, {
+    bool enabled = true,
+  }) {
+    final isSelected = _viewMode == mode;
+    return PopupMenuItem<CalendarViewMode>(
+      value: mode,
+      enabled: enabled,
+      child: Row(
+        children: [
+          Icon(
+            isSelected ? Icons.check : icon,
+            size: 20,
+            color: isSelected
+                ? AppColors.primary
+                : enabled
+                    ? Colors.black87
+                    : Colors.grey,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(
+              color: enabled ? Colors.black87 : Colors.grey,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  /// 格式化日期字符串
-  String _formatDateString(DateTime date) {
-    const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-    final weekday = weekdays[date.weekday - 1];
-    return '${date.year}年${date.month}月${date.day}日 $weekday';
-  }
-
-  /// 判断是否为今天
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
+  /// 根据视图模式构建内容
+  Widget _buildContent() {
+    switch (_viewMode) {
+      case CalendarViewMode.compact:
+        return CalendarCompactView(
+          selectedMonth: _selectedMonth,
+          selectedDate: _selectedDate,
+          displayState: _displayState,
+          checkIns: _checkIns,
+          pomodoroRecords: _pomodoroRecords,
+          pomodoroCountByDate: _pomodoroCountByDate,
+          todoCountByDate: _todoCountByDate,
+          testTodos: _testTodos,
+          scrollController: _scrollController,
+          onDateSelected: (date) {
+            setState(() {
+              _selectedDate = date;
+              _displayState = CalendarDisplayState.expanded;
+              _displayedMonth = DateTime(date.year, date.month, 1);
+            });
+          },
+          onBack: () {
+            setState(() {
+              _displayState = CalendarDisplayState.collapsed;
+              _selectedDate = null;
+              // 返回时根据当前滚动位置更新显示月份
+              if (_scrollController.hasClients) {
+                final offset = _scrollController.offset;
+                final monthHeight = _viewMode == CalendarViewMode.stacked ? 460.0 : 400.0;
+                final currentIndex = (offset / monthHeight + 0.3).floor();
+                final currentMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+                _displayedMonth = DateTime(currentMonth.year, currentMonth.month + currentIndex - 12, 1);
+              }
+            });
+          },
+        );
+      
+      case CalendarViewMode.stacked:
+        return CalendarStackedView(
+          selectedMonth: _selectedMonth,
+          checkIns: _checkIns,
+          pomodoroCountByDate: _pomodoroCountByDate,
+          todoCountByDate: _todoCountByDate,
+          scrollController: _scrollController,
+          onDateSelected: (date) {
+            setState(() {
+              _previousViewMode = _viewMode; // 保存当前视图模式
+              _selectedDate = date;
+              _displayState = CalendarDisplayState.expanded;
+              _viewMode = CalendarViewMode.compact; // 切换到紧凑视图查看详情
+              _displayedMonth = DateTime(date.year, date.month, 1);
+            });
+          },
+          onViewModeChange: () {
+            setState(() {
+              _previousViewMode = _viewMode;
+              _viewMode = CalendarViewMode.compact;
+            });
+          },
+        );
+      
+      case CalendarViewMode.detailed:
+        return const CalendarPlaceholderView(title: '详细信息视图');
+      
+      case CalendarViewMode.list:
+        return const CalendarPlaceholderView(title: '列表视图');
+    }
   }
 }
-
