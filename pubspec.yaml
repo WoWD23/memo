@@ -48,6 +48,10 @@ dependencies:
   # 通知
   flutter_local_notifications: ^16.3.0
 
+  # 日历集成
+  device_calendar: ^4.3.2
+  timezone: ^0.9.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

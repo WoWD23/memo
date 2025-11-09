@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Memo 需要访问您的日历以同步打卡和番茄钟记录，让您在系统日历中查看所有活动。</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Memo 需要访问联系人以正确关联日历事件。</string>
 </dict>
 </plist>

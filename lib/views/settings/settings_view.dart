@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../repositories/check_in_repository.dart';
 import '../../repositories/pomodoro_repository.dart';
+import '../../services/calendar_service.dart';
 
 /// 设置视图
 class SettingsView extends StatefulWidget {
@@ -15,9 +16,12 @@ class SettingsView extends StatefulWidget {
 class _SettingsViewState extends State<SettingsView> {
   final CheckInRepository _checkInRepository = CheckInRepository();
   final PomodoroRepository _pomodoroRepository = PomodoroRepository();
+  final CalendarService _calendarService = CalendarService();
 
   ThemeMode _themeMode = ThemeMode.system;
   int _defaultPomodoroMinutes = 25;
+  bool _syncToCalendar = false; // 是否同步到日历
+  bool _hasCalendarPermission = false; // 是否有日历权限
 
   int _totalCheckIns = 0;
   int _totalPomodoros = 0;
@@ -27,6 +31,7 @@ class _SettingsViewState extends State<SettingsView> {
     super.initState();
     _loadSettings();
     _loadStatistics();
+    _checkCalendarPermission();
   }
 
   Future<void> _loadSettings() async {
@@ -38,7 +43,15 @@ class _SettingsViewState extends State<SettingsView> {
         orElse: () => ThemeMode.system,
       );
       _defaultPomodoroMinutes = prefs.getInt('default_pomodoro_minutes') ?? 25;
+      _syncToCalendar = prefs.getBool('sync_to_calendar') ?? false;
     });
+  }
+
+  Future<void> _checkCalendarPermission() async {
+    final hasPermission = await _calendarService.hasPermissions();
+    if (mounted) {
+      setState(() => _hasCalendarPermission = hasPermission);
+    }
   }
 
   Future<void> _loadStatistics() async {
@@ -57,6 +70,38 @@ class _SettingsViewState extends State<SettingsView> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('default_pomodoro_minutes', minutes);
     setState(() => _defaultPomodoroMinutes = minutes);
+  }
+
+  Future<void> _toggleCalendarSync(bool value) async {
+    if (value && !_hasCalendarPermission) {
+      // 需要开启同步，但没有权限，请求权限
+      final granted = await _calendarService.requestPermissions();
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('需要日历访问权限才能同步记录到系统日历'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+      setState(() => _hasCalendarPermission = true);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('sync_to_calendar', value);
+    setState(() => _syncToCalendar = value);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? '已开启日历同步' : '已关闭日历同步'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -90,6 +135,10 @@ class _SettingsViewState extends State<SettingsView> {
 
                 // 番茄钟设置
                 _buildPomodoroSection(),
+                const SizedBox(height: 16),
+
+                // 日历同步设置
+                _buildCalendarSyncSection(),
                 const SizedBox(height: 16),
 
                 // 关于
@@ -237,6 +286,38 @@ class _SettingsViewState extends State<SettingsView> {
           subtitle: '$_defaultPomodoroMinutes 分钟',
           onTap: () => _showPomodoroMinutesDialog(),
         ),
+      ],
+    );
+  }
+
+  /// 日历同步设置
+  Widget _buildCalendarSyncSection() {
+    return _buildSection(
+      title: '日历同步',
+      children: [
+        _buildSettingTile(
+          icon: Icons.calendar_today,
+          title: '同步到系统日历',
+          subtitle: _syncToCalendar 
+              ? '打卡和番茄钟记录将自动同步到系统日历' 
+              : '不同步到系统日历',
+          trailing: Switch(
+            value: _syncToCalendar,
+            onChanged: _toggleCalendarSync,
+            activeColor: AppColors.primary,
+          ),
+        ),
+        if (_syncToCalendar) ...[
+          _buildSettingTile(
+            icon: Icons.info_outline,
+            title: '权限状态',
+            subtitle: _hasCalendarPermission ? '已授权' : '未授权',
+            trailing: Icon(
+              _hasCalendarPermission ? Icons.check_circle : Icons.error_outline,
+              color: _hasCalendarPermission ? Colors.green : Colors.orange,
+            ),
+          ),
+        ],
       ],
     );
   }

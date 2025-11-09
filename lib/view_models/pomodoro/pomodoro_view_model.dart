@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../repositories/pomodoro_repository.dart';
 import '../../models/pomodoro_record.dart';
 import '../../services/notification_service.dart';
+import '../../services/calendar_service.dart';
 
 /// 番茄钟模式
 enum PomodoroMode {
@@ -24,6 +26,7 @@ enum PomodoroState {
 class PomodoroViewModel extends ChangeNotifier {
   final PomodoroRepository _repository = PomodoroRepository();
   final NotificationService _notificationService = NotificationService.instance;
+  final CalendarService _calendarService = CalendarService();
   
   Timer? _timer;
   Duration _remainingTime = Duration.zero;
@@ -230,10 +233,34 @@ class PomodoroViewModel extends ChangeNotifier {
         endedAt: DateTime.now(),
       );
       
-      await _repository.create(record);
+      final savedRecord = await _repository.create(record);
       debugPrint('番茄钟记录已保存: mode=$_mode, completed=$completed, duration=${_totalDuration.inMinutes}分钟');
+
+      // 只同步工作模式的完成记录到日历
+      if (_mode == PomodoroMode.work && completed && savedRecord != null) {
+        await _syncToCalendarIfEnabled(savedRecord);
+      }
     } catch (e) {
       debugPrint('保存番茄钟记录失败: $e');
+    }
+  }
+
+  /// 如果开启了日历同步，将番茄钟记录同步到系统日历
+  Future<void> _syncToCalendarIfEnabled(PomodoroRecord record) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final syncEnabled = prefs.getBool('sync_to_calendar') ?? false;
+      
+      if (syncEnabled) {
+        final success = await _calendarService.addPomodoroEvent(record);
+        if (success) {
+          debugPrint('番茄钟记录已同步到系统日历');
+        } else {
+          debugPrint('番茄钟记录同步到系统日历失败');
+        }
+      }
+    } catch (e) {
+      debugPrint('同步到日历时出错: $e');
     }
   }
   
